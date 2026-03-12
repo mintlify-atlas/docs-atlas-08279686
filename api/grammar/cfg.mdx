@@ -1,0 +1,645 @@
+---
+title: 'Context-Free Grammar API'
+description: 'API reference for context-free grammars and related classes'
+---
+
+## Core Functions
+
+### generate_cfg
+
+```python
+generate_cfg(cls, registry=None) -> ContextFreeGrammar
+```
+
+Generates a context-free grammar from an annotated callable (class or function).
+
+This is the main entry point for creating grammars from Python classes with type annotations. It automatically inspects the class signature and creates production rules based on the annotations.
+
+<ParamField path="cls" type="type | function" required>
+  The class or function to generate a grammar from. Must have annotated parameters using value types like `DiscreteValue`, `ContinuousValue`, etc.
+</ParamField>
+
+<ParamField path="registry" type="list[type]" default="None">
+  Optional list of classes to pre-register in the grammar's namespace. Useful for avoiding redundant grammar generation when classes reference each other.
+</ParamField>
+
+<ResponseField name="return" type="ContextFreeGrammar">
+  The generated context-free grammar that can sample instances of the class
+</ResponseField>
+
+#### Examples
+
+<CodeGroup>
+```python Basic Usage
+from autogoal.grammar import generate_cfg, DiscreteValue, ContinuousValue
+
+class MyClass:
+    def __init__(
+        self,
+        x: DiscreteValue(1, 3),
+        y: ContinuousValue(0, 1)
+    ):
+        self.x = x
+        self.y = y
+
+grammar = generate_cfg(MyClass)
+print(grammar)
+# Output:
+# <MyClass>   := MyClass (x=<MyClass_x>, y=<MyClass_y>)
+# <MyClass_x> := discrete (min=1, max=3)
+# <MyClass_y> := continuous (min=0, max=1)
+
+# Sample random instances
+instance = grammar.sample()
+print(f"x={instance.x}, y={instance.y}")
+```
+
+```python With Registry
+from autogoal.grammar import generate_cfg, Union
+
+class Model1:
+    def __init__(self, param: DiscreteValue(1, 10)):
+        self.param = param
+
+class Model2:
+    def __init__(self, param: ContinuousValue(0, 1)):
+        self.param = param
+
+class Pipeline:
+    def __init__(self, model: Union("Model", Model1, Model2)):
+        self.model = model
+
+# Pre-register classes
+registry = [Model1, Model2]
+grammar = generate_cfg(Pipeline, registry=registry)
+```
+
+```python From Function
+def my_function(
+    iterations: DiscreteValue(10, 100),
+    threshold: ContinuousValue(0.1, 0.9)
+):
+    pass
+
+grammar = generate_cfg(my_function)
+params = grammar.sample()
+```
+</CodeGroup>
+
+---
+
+## Grammar Classes
+
+### ContextFreeGrammar
+
+```python
+class ContextFreeGrammar(Grammar)
+```
+
+Represents a context-free grammar for sampling class instances.
+
+A CFG consists of:
+- A start symbol (typically the root class)
+- Production rules mapping symbols to their expansions
+- A namespace of available classes and functions
+
+<Info>
+You typically don't instantiate this directly. Use `generate_cfg()` instead.
+</Info>
+
+#### Constructor
+
+```python
+__init__(start: Symbol, namespace: Dict[str, type] = None)
+```
+
+<ParamField path="start" type="Symbol" required>
+  The start symbol for the grammar (root production rule)
+</ParamField>
+
+<ParamField path="namespace" type="dict" default="{}">
+  Dictionary mapping names to classes/functions available during sampling
+</ParamField>
+
+#### Properties
+
+<ResponseField name="namespace" type="dict">
+  Read-only access to the grammar's namespace
+</ResponseField>
+
+#### Methods
+
+<Accordion title="add()">
+```python
+add(symbol: Symbol, production: Production) -> None
+```
+
+Adds a new production rule to the grammar.
+
+<ParamField path="symbol" type="Symbol" required>
+  The symbol (left-hand side) of the production rule
+</ParamField>
+
+<ParamField path="production" type="Production" required>
+  The production (right-hand side) that defines how to expand the symbol
+</ParamField>
+
+**Raises**: `ValueError` if the symbol already exists. Use `replace()` instead.
+
+**Example**:
+```python
+grammar = ContextFreeGrammar(start=Symbol("Root"))
+grammar.add(Symbol("Root"), Empty(Symbol("Root"), grammar))
+```
+</Accordion>
+
+<Accordion title="replace()">
+```python
+replace(symbol: Symbol, production: Production) -> None
+```
+
+Replaces an existing production rule.
+
+<ParamField path="symbol" type="Symbol" required>
+  The symbol whose production to replace
+</ParamField>
+
+<ParamField path="production" type="Production" required>
+  The new production rule
+</ParamField>
+
+**Raises**: `ValueError` if the symbol doesn't exist. Use `add()` instead.
+</Accordion>
+
+<Accordion title="sample()">
+```python
+sample(*, max_iterations: int = 100, sampler: Sampler = None)
+```
+
+Samples a random instance according to the grammar rules.
+
+<ParamField path="max_iterations" type="int" default="100">
+  Maximum number of production applications to prevent infinite expansion
+</ParamField>
+
+<ParamField path="sampler" type="Sampler" default="None">
+  Optional sampler for reproducible results. If None, creates a new default Sampler.
+</ParamField>
+
+**Returns**: An instance of the class defined by the start symbol
+
+**Raises**: `ValueError` if max_iterations is exceeded
+
+**Example**:
+```python
+from autogoal.sampling import Sampler
+
+grammar = generate_cfg(MyClass)
+
+# With custom sampler
+sampler = Sampler(random_state=42)
+instance = grammar.sample(sampler=sampler, max_iterations=50)
+```
+</Accordion>
+
+<Accordion title="__call__()">
+```python
+__call__(sampler: Sampler = None)
+```
+
+Convenience method for sampling. Equivalent to `sample(sampler=sampler)`.
+
+**Example**:
+```python
+grammar = generate_cfg(MyClass)
+instance = grammar()  # Same as grammar.sample()
+```
+</Accordion>
+
+<Accordion title="__str__()">
+```python
+__str__() -> str
+```
+
+Returns a human-readable string representation of the grammar in BNF-like format.
+
+**Example**:
+```python
+grammar = generate_cfg(MyClass)
+print(grammar)
+# <MyClass>   := MyClass (x=<MyClass_x>)
+# <MyClass_x> := discrete (min=1, max=5)
+```
+</Accordion>
+
+---
+
+## Value Annotation Types
+
+### DiscreteValue
+
+```python
+class DiscreteValue
+```
+
+Annotation for integer parameters within a range.
+
+#### Constructor
+
+```python
+__init__(min: int, max: int)
+```
+
+<ParamField path="min" type="int" required>
+  Minimum value (inclusive)
+</ParamField>
+
+<ParamField path="max" type="int" required>
+  Maximum value (inclusive)
+</ParamField>
+
+#### Example
+
+```python
+class MyClass:
+    def __init__(self, n_layers: DiscreteValue(1, 10)):
+        self.n_layers = n_layers
+
+grammar = generate_cfg(MyClass)
+instance = grammar.sample()
+print(instance.n_layers)  # Integer between 1 and 10
+```
+
+---
+
+### ContinuousValue
+
+```python
+class ContinuousValue
+```
+
+Annotation for float parameters within a range.
+
+#### Constructor
+
+```python
+__init__(min: float, max: float)
+```
+
+<ParamField path="min" type="float" required>
+  Minimum value (inclusive)
+</ParamField>
+
+<ParamField path="max" type="float" required>
+  Maximum value (inclusive)
+</ParamField>
+
+#### Example
+
+```python
+class MyClass:
+    def __init__(self, learning_rate: ContinuousValue(0.001, 0.1)):
+        self.learning_rate = learning_rate
+
+grammar = generate_cfg(MyClass)
+instance = grammar.sample()
+print(instance.learning_rate)  # Float between 0.001 and 0.1
+```
+
+---
+
+### CategoricalValue
+
+```python
+class CategoricalValue
+```
+
+Annotation for parameters that select one value from a discrete set.
+
+#### Constructor
+
+```python
+__init__(*options)
+```
+
+<ParamField path="options" type="*args" required>
+  Variable number of possible values
+</ParamField>
+
+#### Example
+
+```python
+class MyClass:
+    def __init__(
+        self,
+        activation: CategoricalValue("relu", "tanh", "sigmoid")
+    ):
+        self.activation = activation
+
+grammar = generate_cfg(MyClass)
+instance = grammar.sample()
+print(instance.activation)  # One of "relu", "tanh", or "sigmoid"
+```
+
+---
+
+### BooleanValue
+
+```python
+class BooleanValue
+```
+
+Annotation for boolean parameters.
+
+#### Example
+
+```python
+class MyClass:
+    def __init__(self, use_dropout: BooleanValue()):
+        self.use_dropout = use_dropout
+
+grammar = generate_cfg(MyClass)
+instance = grammar.sample()
+print(instance.use_dropout)  # True or False
+```
+
+---
+
+## Composite Types
+
+### Union
+
+```python
+class Union
+```
+
+Defines a choice between multiple alternative types.
+
+Useful for creating grammars where a parameter can be one of several different classes, each with its own parameters.
+
+#### Constructor
+
+```python
+__init__(name: str, *clss)
+```
+
+<ParamField path="name" type="str" required>
+  Name for this union type (used in grammar representation)
+</ParamField>
+
+<ParamField path="clss" type="*args" required>
+  Variable number of classes that are alternatives in this union
+</ParamField>
+
+#### Example
+
+<CodeGroup>
+```python Basic Union
+from autogoal.grammar import generate_cfg, Union, DiscreteValue
+
+class SVM:
+    def __init__(self, C: ContinuousValue(0.1, 10)):
+        self.C = C
+
+class RandomForest:
+    def __init__(self, n_estimators: DiscreteValue(10, 100)):
+        self.n_estimators = n_estimators
+
+class NeuralNet:
+    def __init__(self, hidden_size: DiscreteValue(10, 1000)):
+        self.hidden_size = hidden_size
+
+# Create union of classifiers
+Classifier = Union("Classifier", SVM, RandomForest, NeuralNet)
+
+grammar = generate_cfg(Classifier)
+# Each sample will be one of the three types
+model = grammar.sample()
+```
+
+```python In Class Parameters
+class Pipeline:
+    def __init__(
+        self,
+        model: Union("Model", SVM, RandomForest),
+        scale: BooleanValue()
+    ):
+        self.model = model
+        self.scale = scale
+
+grammar = generate_cfg(Pipeline)
+pipeline = grammar.sample()
+print(type(pipeline.model))  # Either SVM or RandomForest
+```
+</CodeGroup>
+
+---
+
+### Subset
+
+```python
+class Subset
+```
+
+Defines a selection of multiple items from a collection.
+
+Useful for feature selection, ensemble methods, or any scenario where you need to select a subset of available options.
+
+#### Constructor
+
+```python
+__init__(name: str, *members, allow_empty: bool = False)
+```
+
+<ParamField path="name" type="str" required>
+  Name for this subset type
+</ParamField>
+
+<ParamField path="members" type="*args" required>
+  Variable number of items that can be selected. Can be constants or classes.
+</ParamField>
+
+<ParamField path="allow_empty" type="bool" default="False">
+  Whether to allow selecting zero items. If False, at least one item must be selected.
+</ParamField>
+
+#### Examples
+
+<CodeGroup>
+```python Constant Subset
+class FeatureSelector:
+    def __init__(
+        self,
+        features: Subset(
+            "Features",
+            "age", "income", "education", "occupation",
+            allow_empty=False
+        )
+    ):
+        self.features = features
+
+grammar = generate_cfg(FeatureSelector)
+instance = grammar.sample()
+print(instance.features)  # e.g., ['age', 'education']
+```
+
+```python Class Subset
+class Ensemble:
+    def __init__(
+        self,
+        models: Subset("Models", SVM, RandomForest, NeuralNet)
+    ):
+        self.models = models
+
+grammar = generate_cfg(Ensemble)
+ensemble = grammar.sample()
+print(len(ensemble.models))  # 1, 2, or 3 model instances
+```
+</CodeGroup>
+
+---
+
+## Symbol and Production Classes
+
+### Symbol
+
+```python
+class Symbol
+```
+
+Represents a non-terminal symbol in the grammar.
+
+<Info>
+You typically don't need to use this directly unless building custom grammars.
+</Info>
+
+#### Constructor
+
+```python
+__init__(name: str)
+```
+
+<ParamField path="name" type="str" required>
+  The name of the symbol
+</ParamField>
+
+---
+
+### CfgInitializer
+
+```python
+class CfgInitializer
+```
+
+Utility class for caching and reusing generated grammars.
+
+This class generates grammars on-demand and caches them for reuse, which is useful when you need to sample from the same grammar multiple times.
+
+#### Constructor
+
+```python
+__init__(registry=None)
+```
+
+<ParamField path="registry" type="list[type]" default="None">
+  Optional list of classes to pre-register
+</ParamField>
+
+#### Methods
+
+<Accordion title="__call__()">
+```python
+__call__(cls, sampler=None)
+```
+
+Generate grammar for a class (or retrieve from cache) and sample an instance.
+
+<ParamField path="cls" type="type" required>
+  The class to generate/sample from
+</ParamField>
+
+<ParamField path="sampler" type="Sampler" default="None">
+  Optional sampler for reproducible results
+</ParamField>
+
+**Returns**: A sampled instance of the class
+
+**Example**:
+```python
+from autogoal.grammar import CfgInitializer, DiscreteValue
+
+class MyClass:
+    def __init__(self, x: DiscreteValue(1, 10)):
+        self.x = x
+
+initializer = CfgInitializer()
+
+# First call generates grammar
+instance1 = initializer(MyClass)
+
+# Subsequent calls reuse cached grammar
+instance2 = initializer(MyClass)
+instance3 = initializer(MyClass)
+```
+</Accordion>
+
+---
+
+## Advanced Usage
+
+### Custom generate_cfg Method
+
+Classes can implement their own `generate_cfg` method for custom grammar generation:
+
+```python
+class CustomClass:
+    def __init__(self, param):
+        self.param = param
+    
+    @classmethod
+    def generate_cfg(cls, grammar, head):
+        # Add custom production rules
+        grammar.add(
+            head,
+            Distribution(head, grammar, "discrete", min=1, max=100)
+        )
+        return grammar
+
+grammar = generate_cfg(CustomClass)
+```
+
+### Recursive Grammars
+
+Grammars can reference themselves for recursive structures:
+
+```python
+class TreeNode:
+    def __init__(
+        self,
+        value: DiscreteValue(1, 100),
+        left: Union("Node", "TreeNode", "Empty"),
+        right: Union("Node", "TreeNode", "Empty")
+    ):
+        self.value = value
+        self.left = left
+        self.right = right
+
+class Empty:
+    pass
+
+grammar = generate_cfg(TreeNode, registry=[TreeNode, Empty])
+tree = grammar.sample(max_iterations=10)  # Limit depth
+```
+
+---
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="book" href="/api/grammar/overview">
+    Grammar & Sampling overview and concepts
+  </Card>
+  <Card title="Graph Grammar API" icon="network-wired" href="/api/grammar/graph">
+    API reference for graph grammars
+  </Card>
+</CardGroup>

@@ -1,0 +1,161 @@
+---
+title: "Welcome to AutoGOAL"
+description: "A Python framework for program synthesis with a focus on Automated Machine Learning"
+---
+
+<img
+  src="https://autogoal.github.io/autogoal-banner.png"
+  alt="AutoGOAL Banner"
+  style={{ borderRadius: '8px' }}
+/>
+
+## What is AutoGOAL?
+
+AutoGOAL is a Python framework for automatically finding the best way to solve a given task. It has been designed mainly for **Automated Machine Learning** (AutoML) but can be used in any scenario where you have several possible ways to solve a given problem.
+
+Technically speaking, AutoGOAL is a framework for **program synthesis** — finding the best program to solve a given problem, provided that you can describe the space of all possible programs. AutoGOAL provides low-level components to define different spaces and efficiently search in them.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with AutoGOAL in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install AutoGOAL and its dependencies
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Learn about AutoGOAL's architecture and design
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/automl">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Automatic Pipeline Generation" icon="wand-magic-sparkles">
+    AutoGOAL automatically assembles machine learning algorithms into pipelines
+  </Card>
+  <Card title="Type-Based Composition" icon="puzzle-piece">
+    Use semantic types to ensure algorithms are composed correctly
+  </Card>
+  <Card title="Multiple Search Strategies" icon="magnifying-glass">
+    Choose from PGE, Random Search, Surrogate, and more optimization algorithms
+  </Card>
+  <Card title="Extensible Architecture" icon="plug">
+    Easily extend with custom algorithms through the contrib system
+  </Card>
+  <Card title="CLI Interface" icon="terminal">
+    Train and predict from the command line without writing code
+  </Card>
+  <Card title="Cross-Validation" icon="chart-line">
+    Built-in support for cross-validation and multi-objective optimization
+  </Card>
+</CardGroup>
+
+## How It Works
+
+AutoGOAL works by defining a **search space** of possible machine learning pipelines and using **optimization algorithms** to find the best pipeline for your specific problem.
+
+<Steps>
+  <Step title="Define Input and Output Types">
+    Specify what kind of data you have and what you want to predict using AutoGOAL's semantic type system.
+  </Step>
+  
+  <Step title="Configure the Search">
+    Choose which algorithms to include, how long to search, and which optimization strategy to use.
+  </Step>
+  
+  <Step title="Let AutoGOAL Search">
+    AutoGOAL automatically generates and evaluates pipelines, learning from each iteration.
+  </Step>
+  
+  <Step title="Get the Best Pipeline">
+    Retrieve the best performing pipeline and use it for predictions on new data.
+  </Step>
+</Steps>
+
+## Simple Example
+
+Here's a minimal example showing how to use AutoGOAL for classification:
+
+```python
+from autogoal.datasets import cars
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+
+# Load a dataset
+X, y = cars.load()
+
+# Create an AutoML instance
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical
+)
+
+# Search for the best pipeline
+automl.fit(X, y)
+
+# View results
+print(automl.best_pipeline_)
+print(automl.best_score_)
+```
+
+<Note>
+This example runs for about 5 minutes by default. You can adjust the search time using the `search_kwargs` parameter.
+</Note>
+
+## Use Cases
+
+AutoGOAL is designed for researchers and practitioners who need to:
+
+- **Quickly prototype** machine learning solutions without manual pipeline engineering
+- **Benchmark** different ML approaches on custom datasets
+- **Automate** repetitive hyperparameter tuning and algorithm selection
+- **Explore** the space of possible solutions for complex problems
+- **Build** AutoML systems with custom algorithms and search strategies
+
+## Research Foundation
+
+AutoGOAL is built on research in grammatical evolution and program synthesis. If you use AutoGOAL in academic work, please cite:
+
+<Accordion title="Citation (BibTeX)">
+```bibtex
+@article{estevez2020general,
+  title={General-purpose hierarchical optimisation of machine learning pipelines with grammatical evolution},
+  author={Est{\'e}vez-Velarde, Suilan and Guti{\'e}rrez, Yoan and Almeida-Cruz, Yudivi{\'a}n and Montoyo, Andr{\'e}s},
+  journal={Information Sciences},
+  year={2020},
+  publisher={Elsevier},
+  doi={10.1016/j.ins.2020.07.035}
+}
+```
+</Accordion>
+
+## Community and Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/gia-uh/autogoal">
+    View source code, report issues, and contribute
+  </Card>
+  <Card title="Documentation" icon="book-open" href="https://autogoal.github.io">
+    Visit the original documentation site
+  </Card>
+</CardGroup>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="play" href="/quickstart">
+    Follow the quickstart to build your first AutoML pipeline
+  </Card>
+  <Card title="Learn Core Concepts" icon="graduation-cap" href="/concepts/architecture">
+    Understand how AutoGOAL works under the hood
+  </Card>
+  <Card title="Explore the CLI" icon="terminal" href="/cli/overview">
+    Use AutoGOAL from the command line
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/automl">
+    Dive into the complete API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,307 @@
+---
+title: "Knowledge Base Overview"
+description: "Core module for semantic type checking and algorithm composition in AutoGOAL"
+---
+
+## Introduction
+
+The Knowledge Base (`autogoal.kb`) is the foundation of AutoGOAL's type-driven program synthesis system. It provides:
+
+- **Semantic Types**: A rich type system for describing data semantics beyond structural types
+- **Algorithm Abstractions**: Base classes for defining composable algorithms
+- **Pipeline Construction**: Tools for automatically building algorithm pipelines
+- **Type Checking**: Runtime verification that algorithms are composed correctly
+
+<CardGroup cols={2}>
+  <Card title="Algorithm Classes" icon="code" href="/api/kb/algorithms">
+    Learn about AlgorithmBase, Pipeline, and algorithm composition
+  </Card>
+  <Card title="Semantic Types" icon="tags" href="/api/kb/semantic-types">
+    Explore the semantic type system and type checking
+  </Card>
+  <Card title="Data Types" icon="database" href="/api/kb/data-types">
+    Browse built-in semantic data types
+  </Card>
+</CardGroup>
+
+## Module Structure
+
+The Knowledge Base is organized into three main components:
+
+### Algorithm Module (`_algorithm.py`)
+
+Defines abstract base classes for algorithms and pipelines:
+
+- `Algorithm` - Abstract interface for algorithms
+- `AlgorithmBase` - Concrete base class with automatic introspection
+- `Pipeline` - Sequential composition of algorithms
+- `Supervised` - Semantic type for supervised learning
+- `build_pipeline_graph()` - Constructs pipeline search spaces
+
+### Semantics Module (`_semantics.py`)
+
+Implements the semantic type system:
+
+- `SemanticType` - Base class for all semantic types
+- `Seq[T]` - Generic sequence types
+- `Tensor[dim, dtype, structure]` - Multi-dimensional arrays
+- Type hierarchies for text, vectors, and matrices
+
+### Data Module (`_data.py`)
+
+Provides utilities for working with data types:
+
+- `Interface` - Type compatibility checking
+- `Distinct` - Constraint for unique algorithm selection
+
+## Core Concepts
+
+### Semantic Types vs Structural Types
+
+AutoGOAL distinguishes between **structural types** (like `list` or `numpy.ndarray`) and **semantic types** (like `Document` or `MatrixContinuousDense`).
+
+```python
+from autogoal.kb import Word, Sentence, Document
+
+# All strings structurally, but different semantically
+word = "hello"          # Word
+sentence = "Hello world."  # Sentence
+doc = "Hello. World."      # Document
+
+isinstance(word, Word)       # True
+isinstance(sentence, Word)   # False (has space)
+isinstance(doc, Document)    # True
+```
+
+<Note>
+Semantic types enable AutoGOAL to select appropriate algorithms based on **meaning**, not just structure. For example, a tokenizer should process `Document` but not `Word`.
+</Note>
+
+### Type-Driven Composition
+
+Algorithms declare their input and output types using type annotations:
+
+```python
+from autogoal.kb import AlgorithmBase, Document, Seq, Word
+
+class Tokenizer(AlgorithmBase):
+    def run(self, doc: Document) -> Seq[Word]:
+        return doc.split()
+
+class Stemmer(AlgorithmBase):
+    def run(self, word: Word) -> Word:
+        # Apply stemming logic
+        return stemmed_word
+```
+
+AutoGOAL automatically determines that `Tokenizer` produces output compatible with `Stemmer` (via `Seq` lifting).
+
+### Pipeline Generation
+
+The Knowledge Base can automatically construct pipelines from a registry of algorithms:
+
+```python
+from autogoal.kb import (
+    build_pipeline_graph,
+    MatrixContinuousDense,
+    VectorCategorical,
+    Supervised
+)
+from autogoal_contrib import find_classes
+
+# Build a search space of pipelines
+registry = find_classes()
+pipeline_space = build_pipeline_graph(
+    input_types=[MatrixContinuousDense, Supervised[VectorCategorical]],
+    output_type=VectorCategorical,
+    registry=registry
+)
+
+# Sample a random pipeline
+pipeline = pipeline_space.sample()
+print(pipeline.algorithms)
+```
+
+## Key Features
+
+### Automatic Type Introspection
+
+`AlgorithmBase` automatically extracts type information from method signatures:
+
+```python
+class MyAlgorithm(AlgorithmBase):
+    def __init__(self, alpha: float = 0.5):
+        self.alpha = alpha
+    
+    def run(self, x: MatrixContinuousDense) -> VectorContinuous:
+        # Implementation
+        pass
+
+# Introspection works automatically
+MyAlgorithm.input_types()   # (MatrixContinuousDense,)
+MyAlgorithm.output_type()   # VectorContinuous
+MyAlgorithm.input_args()    # ('x',)
+```
+
+### Supervised Learning Types
+
+The `Supervised[T]` type represents labeled data:
+
+```python
+from autogoal.kb import Supervised, VectorCategorical
+
+# Supervised[T] is a subclass of T
+issubclass(Supervised[VectorCategorical], VectorCategorical)  # True
+issubclass(VectorCategorical, Supervised[VectorCategorical])  # False
+
+# Use in algorithm signatures
+class Classifier(AlgorithmBase):
+    def run(self, X: MatrixContinuousDense, y: Supervised[VectorCategorical]) \
+        -> VectorCategorical:
+        # Training logic
+        pass
+```
+
+### Sequence Lifting
+
+Algorithms can be automatically lifted to work on sequences:
+
+```python
+from autogoal.kb import make_seq_algorithm
+
+# Original algorithm: Word -> float
+class WordLength(AlgorithmBase):
+    def run(self, word: Word) -> float:
+        return len(word)
+
+# Lifted version: Seq[Word] -> Seq[float]
+SeqWordLength = make_seq_algorithm(WordLength)
+
+lengths = SeqWordLength().run(["hello", "world"])
+print(lengths)  # [5.0, 5.0]
+```
+
+## Type Hierarchies
+
+The Knowledge Base defines several type hierarchies:
+
+### Text Types
+
+```
+Text
+└── Document
+    └── Sentence
+        └── Word
+```
+
+### Tensor Types
+
+```
+Tensor[dim, dtype, structure]
+├── Vector = Tensor[1, None, None]
+│   ├── VectorContinuous = Tensor[1, Continuous, None]
+│   ├── VectorCategorical = Tensor[1, Categorical, Dense]
+│   └── VectorDiscrete = Tensor[1, Discrete, Dense]
+└── Matrix = Tensor[2, None, None]
+    ├── MatrixContinuousDense = Tensor[2, Continuous, Dense]
+    ├── MatrixContinuousSparse = Tensor[2, Continuous, Sparse]
+    ├── MatrixCategorical = Tensor[2, Categorical, Dense]
+    └── MatrixDiscrete = Tensor[2, Discrete, Dense]
+```
+
+<Info>
+Type hierarchies enable covariant subtyping: a `Word` can be used wherever a `Text` is expected.
+</Info>
+
+## Common Patterns
+
+### Defining Custom Algorithms
+
+```python
+from autogoal.kb import AlgorithmBase
+from autogoal.grammar import Continuous, Categorical
+
+class MyClassifier(AlgorithmBase):
+    def __init__(self, 
+                 learning_rate: Continuous(0.001, 0.1),
+                 max_depth: Discrete(1, 10)):
+        self.learning_rate = learning_rate
+        self.max_depth = max_depth
+    
+    def run(self, X: MatrixContinuousDense, 
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Training and prediction logic
+        return predictions
+```
+
+### Building Input Arguments
+
+The `build_input_args()` function maps semantic types to algorithm parameters:
+
+```python
+from autogoal.kb import build_input_args
+
+class MyAlgorithm(AlgorithmBase):
+    def run(self, a: int, b: str) -> float:
+        return float(a + len(b))
+
+values = {int: 42, str: "hello", float: 3.14}
+args = build_input_args(MyAlgorithm, values)
+print(args)  # {'a': 42, 'b': 'hello'}
+```
+
+### Pipeline Execution
+
+```python
+from autogoal.kb import Pipeline, AlgorithmBase
+
+# Define algorithms
+alg1 = Tokenizer()
+alg2 = SeqStemmer(stemmer_type='porter')
+alg3 = Vectorizer()
+
+# Create pipeline
+pipeline = Pipeline(
+    algorithms=[alg1, alg2, alg3],
+    input_types=[Document]
+)
+
+# Run pipeline
+result = pipeline.run("This is a sample document.")
+```
+
+## Serialization
+
+Pipelines and algorithms support serialization:
+
+```python
+from pathlib import Path
+
+# Save pipeline
+pipeline.save_algorithms(Path("./my_pipeline"))
+
+# Load pipeline
+loaded_algorithms, input_types = Pipeline.load_algorithms(Path("./my_pipeline"))
+reconstructed = Pipeline(loaded_algorithms, input_types)
+```
+
+<Warning>
+Pipeline serialization uses `dill` for pickling. Ensure all custom algorithms are importable when loading.
+</Warning>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Algorithm Base Classes" icon="code" href="/api/kb/algorithms">
+    Deep dive into algorithm abstractions and Pipeline
+  </Card>
+  <Card title="Semantic Type System" icon="tags" href="/api/kb/semantic-types">
+    Learn about SemanticType, Supervised, and type checking
+  </Card>
+  <Card title="Built-in Data Types" icon="database" href="/api/kb/data-types">
+    Explore Text, Vector, Matrix, and Tensor types
+  </Card>
+  <Card title="Custom Algorithms Guide" icon="puzzle-piece" href="/guides/custom-algorithms">
+    Create your own algorithm implementations
+  </Card>
+</CardGroup>

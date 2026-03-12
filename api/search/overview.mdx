@@ -1,0 +1,203 @@
+---
+title: Search Overview
+description: Overview of search algorithms and optimization strategies in AutoGOAL
+---
+
+The `autogoal.search` module provides a collection of search algorithms for automated machine learning pipeline optimization. These algorithms explore the space of possible pipelines to find optimal solutions based on one or more objective functions.
+
+## Architecture
+
+All search algorithms in AutoGOAL inherit from the `SearchAlgorithm` base class, which provides a common interface for:
+
+- **Solution Generation**: Creating candidate pipelines using probabilistic samplers
+- **Fitness Evaluation**: Assessing pipeline quality with configurable timeouts and resource limits
+- **Multi-objective Optimization**: Supporting Pareto-optimal solutions for multiple objectives
+- **Progress Monitoring**: Tracking search progress through customizable loggers
+
+## Available Algorithms
+
+<CardGroup cols={2}>
+  <Card title="RandomSearch" icon="dice" href="./algorithms#randomsearch">
+    Baseline algorithm that samples pipelines uniformly at random
+  </Card>
+  <Card title="PESearch" icon="brain" href="./algorithms#pesearch">
+    Probabilistic Estimation algorithm that learns from successful pipelines
+  </Card>
+  <Card title="NSPESearch" icon="chart-line" href="./algorithms#nspesearch">
+    Non-dominated Sorting variant for multi-objective optimization
+  </Card>
+  <Card title="SurrogateSearch" icon="network-wired" href="./algorithms#surrogatesearch">
+    Meta-learning approach using surrogate models to guide search
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Multi-objective Optimization
+
+All search algorithms support optimizing multiple objectives simultaneously. Solutions are ranked using Pareto dominance, maintaining a front of non-dominated solutions:
+
+```python
+from autogoal.search import PESearch
+
+# Optimize for both accuracy and inference time
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate_pipeline,
+    maximize=(True, False),  # maximize accuracy, minimize time
+    pop_size=50,
+    search_timeout=3600
+)
+
+best_solutions, best_scores = search.run(generations=100)
+```
+
+### Resource Management
+
+Configure resource limits to prevent runaway evaluations:
+
+<ParamField path="evaluation_timeout" type="int" default="60000">
+  Maximum time (in milliseconds) for each pipeline evaluation
+</ParamField>
+
+<ParamField path="memory_limit" type="int" default="4294967296">
+  Maximum memory (in bytes) for each pipeline evaluation (4GB default)
+</ParamField>
+
+<ParamField path="search_timeout" type="int" default="300000">
+  Maximum time (in milliseconds) for the entire search process (5 minutes default)
+</ParamField>
+
+### Early Stopping
+
+Prevent wasted computation when optimization plateaus:
+
+```python
+search = RandomSearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    early_stop=0.3  # Stop if no improvement for 30% of generations
+)
+```
+
+### Error Handling
+
+Control how pipeline evaluation errors are handled:
+
+```python
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    errors="ignore"  # Options: "raise" or "ignore"
+)
+```
+
+## Search Workflow
+
+The typical search workflow follows these steps:
+
+1. **Initialization**: Configure search parameters and resource limits
+2. **Generation**: Create candidate pipelines using probabilistic samplers
+3. **Evaluation**: Assess fitness with timeout and memory constraints
+4. **Selection**: Rank solutions using single or multi-objective criteria
+5. **Learning**: Update sampling distribution based on successful pipelines
+6. **Termination**: Stop when generation limit, timeout, or target is reached
+
+```python
+from autogoal.search import PESearch
+from autogoal.kb import build_pipeline_graph
+
+# Define the search space
+space = build_pipeline_graph(...)
+
+# Configure search algorithm
+search = PESearch(
+    generator_fn=lambda sampler: space.sample(sampler),
+    fitness_fn=evaluate_on_data,
+    pop_size=30,
+    maximize=True,
+    search_timeout=3600,
+    logger=RichLogger()
+)
+
+# Execute search
+best_pipelines, best_scores = search.run(generations=50)
+
+# Use the best pipeline
+best_pipeline = best_pipelines[0]
+best_pipeline.fit(X_train, y_train)
+predictions = best_pipeline.predict(X_test)
+```
+
+## Logging and Monitoring
+
+Track search progress with built-in loggers:
+
+<CardGroup cols={2}>
+  <Card title="Logger" icon="file" href="./loggers#logger">
+    Base logger interface (no output)
+  </Card>
+  <Card title="ConsoleLogger" icon="terminal" href="./loggers#consolelogger">
+    Simple text-based progress output
+  </Card>
+  <Card title="RichLogger" icon="palette" href="./loggers#richlogger">
+    Beautiful formatted output with progress bars
+  </Card>
+  <Card title="MemoryLogger" icon="database" href="./loggers#memorylogger">
+    Store metrics in memory for analysis
+  </Card>
+  <Card title="JsonLogger" icon="code" href="./loggers#jsonlogger">
+    Export search history to JSON files
+  </Card>
+</CardGroup>
+
+## Performance Considerations
+
+### Population Size
+
+Larger populations explore more of the search space per generation but increase computation:
+
+- **Small (10-20)**: Fast iterations, may converge prematurely
+- **Medium (30-50)**: Balanced exploration and exploitation
+- **Large (100+)**: Thorough exploration, slower convergence
+
+### Duplicate Detection
+
+Control whether identical pipelines can be evaluated multiple times:
+
+```python
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    allow_duplicates=False  # Skip previously seen pipelines
+)
+```
+
+### Parallel Evaluation
+
+The `fitness_fn` can be wrapped to support parallel evaluation of multiple pipelines:
+
+```python
+from multiprocessing import Pool
+
+def parallel_fitness(pipeline):
+    # This function will be called in separate processes
+    return evaluate_pipeline(pipeline)
+
+search = RandomSearch(
+    generator_fn=build_pipeline,
+    fitness_fn=parallel_fitness,
+    pop_size=50
+)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Algorithm Details" icon="book" href="./algorithms">
+    Learn about specific search algorithms and their parameters
+  </Card>
+  <Card title="Logger Configuration" icon="wrench" href="./loggers">
+    Configure logging and monitoring for your searches
+  </Card>
+</CardGroup>

@@ -1,0 +1,723 @@
+---
+title: "Semantic Types"
+description: "Type system for describing data semantics beyond structural types"
+---
+
+## Overview
+
+AutoGOAL's semantic type system (`autogoal.kb._semantics`) enables type-driven algorithm composition by describing **what data means**, not just its structure.
+
+<Info>
+Semantic types allow AutoGOAL to distinguish between a list of words and a list of sentences, even though both are structurally `List[str]`.
+</Info>
+
+## Core Concepts
+
+### Structural vs Semantic Types
+
+**Structural types** describe the shape and implementation of data:
+- `str`, `list`, `numpy.ndarray`, `dict`
+
+**Semantic types** describe the meaning and domain of data:
+- `Word`, `Sentence`, `Document`, `Vector`, `Matrix`
+
+```python
+from autogoal.kb import Word, Sentence, Document
+
+# All are strings structurally
+word = "hello"
+sentence = "Hello world."
+document = "Hello. This is a document."
+
+# But different semantically
+isinstance(word, Word)         # True
+isinstance(sentence, Word)     # False
+isinstance(document, Document) # True
+```
+
+---
+
+## SemanticType
+
+The base class for all semantic types in AutoGOAL.
+
+<ParamField path="SemanticType" type="metaclass=SemanticTypeMeta">
+  Base class for defining semantic types with custom matching logic.
+</ParamField>
+
+### Class Methods
+
+<ResponseField name="_match(x)" type="bool">
+  Determines if a value matches this semantic type.
+  
+  <ParamField path="x" type="Any" required>
+    Value to check for semantic compatibility.
+  </ParamField>
+  
+  ```python
+  class Word(SemanticType):
+      @classmethod
+      def _match(cls, x):
+          return isinstance(x, str) and " " not in x
+  
+  Word._match("hello")  # True
+  Word._match("hello world")  # False
+  ```
+</ResponseField>
+
+<ResponseField name="_conforms(other)" type="bool">
+  Checks if this type conforms to (is a subtype of) another type.
+  
+  <ParamField path="other" type="type" required>
+    The type to check conformance against.
+  </ParamField>
+  
+  Used by `issubclass()` to implement semantic subtyping.
+</ResponseField>
+
+<ResponseField name="_name()" type="str">
+  Returns the display name of the semantic type.
+  
+  ```python
+  Word._name()  # "Word"
+  Seq[Word]._name()  # "Seq[Word]"
+  ```
+</ResponseField>
+
+<ResponseField name="_specialize(*args)" type="SemanticType">
+  Creates a specialized version of a generic type (e.g., `Seq[Word]` from `Seq`).
+  
+  ```python
+  WordList = Seq._specialize(Word)
+  WordList == Seq[Word]  # True
+  ```
+</ResponseField>
+
+<ResponseField name="infer(x)" type="SemanticType">
+  Automatically infers the most specific semantic type for a value.
+  
+  <ParamField path="x" type="Any" required>
+    Value to infer the semantic type for.
+  </ParamField>
+  
+  ```python
+  from autogoal.kb import SemanticType
+  import numpy as np
+  
+  SemanticType.infer("word")  # Word
+  SemanticType.infer("hello world")  # Sentence
+  SemanticType.infer(np.ones((2, 2)))  # Tensor[2, Continuous, Dense]
+  ```
+</ResponseField>
+
+### Serialization
+
+<ResponseField name="to_json(data)" type="str">
+  Converts data to JSON string representation.
+  
+  ```python
+  json_str = SemanticType.to_json([1, 2, 3])
+  ```
+</ResponseField>
+
+<ResponseField name="from_json(data)" type="Any">
+  Parses data from JSON string.
+  
+  ```python
+  data = SemanticType.from_json('[1, 2, 3]')
+  ```
+</ResponseField>
+
+---
+
+## Generic Semantic Types
+
+### Seq
+
+Represents a sequence (list/tuple) of elements of a specific semantic type.
+
+<ParamField path="Seq[T]" type="SemanticType">
+  Generic sequence type parameterized by internal semantic type T.
+</ParamField>
+
+#### Features
+
+- **Type Specialization**: `Seq[Word]` creates a specific sequence type
+- **Singleton**: Each specialization is a unique class returned by identity
+- **Covariant Subtyping**: `Seq[Word]` ⊂ `Seq[Sentence]` when `Word` ⊂ `Sentence`
+- **Serializable**: Can be pickled and unpickled
+
+#### Examples
+
+```python
+from autogoal.kb import Seq, Word, Sentence, Text
+
+# Type checking
+isinstance(["hello", "world"], Seq[Word])  # True
+isinstance(["hello world"], Seq[Word])     # False (contains space)
+
+# Identity
+id(Seq[Word]) == id(Seq[Word])  # True
+
+# Subclass relationships
+issubclass(Seq[Word], Seq)          # True
+issubclass(Seq[Word], Seq[Text])    # True (Word ⊂ Text)
+issubclass(Seq[Text], Seq[Word])    # False
+
+# Pretty printing
+print(Seq)         # Seq
+print(Seq[Word])   # Seq[Word]
+
+# Serialization
+from pickle import dumps, loads
+SeqWord = Seq[Word]
+reloaded = loads(dumps(SeqWord))
+print(reloaded)  # Seq[Word]
+assert reloaded is SeqWord  # Same identity
+```
+
+#### Internal Implementation
+
+<Accordion title="How Seq works internally">
+  When you write `Seq[Word]`, Python calls `Seq.__getitem__(Word)`, which:
+  
+  1. Checks if a specialized class for `Word` already exists in `__internal_types`
+  2. If not, dynamically creates a new class `SeqImp` that:
+     - Stores `Word` as `__internal_type__`
+     - Implements `_match()` to check list elements
+     - Implements `_conforms()` for subclass checks
+     - Implements `_reduce()` for pickling
+  3. Caches and returns the specialized class
+  
+  This ensures that `Seq[Word]` always returns the exact same class object.
+</Accordion>
+
+---
+
+### Tensor
+
+Represents multi-dimensional arrays with semantic annotations for dimensionality, data type, and structure.
+
+<ParamField path="Tensor[dim, dtype, structure]" type="SemanticType">
+  Generic tensor type with three semantic flags.
+</ParamField>
+
+#### Type Parameters
+
+<ParamField path="dim" type="int | None">
+  Number of dimensions (1 for vector, 2 for matrix, etc.). Use `None` for any dimensionality.
+</ParamField>
+
+<ParamField path="dtype" type="TensorData | None">
+  Data type of elements: `Continuous`, `Discrete`, or `Categorical`. Use `None` for any data type.
+</ParamField>
+
+<ParamField path="structure" type="TensorStructure | None">
+  Storage structure: `Dense` or `Sparse`. Use `None` for any structure.
+</ParamField>
+
+#### Features
+
+- **Partial Specialization**: Any parameter can be `None` to represent "any value"
+- **Covariant Subtyping**: More specific types are subtypes of less specific ones
+- **NumPy/SciPy Support**: Works with `numpy.ndarray` and `scipy.sparse` matrices
+
+#### Examples
+
+```python
+from autogoal.kb import Tensor, Continuous, Discrete, Dense, Sparse
+import numpy as np
+import scipy.sparse as sp
+
+# Create test data
+dense_matrix = np.ones((10, 10))
+sparse_matrix = sp.coo_matrix((10, 10))
+
+# Type checking
+isinstance(dense_matrix, Tensor)  # True
+isinstance(dense_matrix, Tensor[2, None, None])  # True
+isinstance(dense_matrix, Tensor[2, Continuous, Dense])  # True
+isinstance(dense_matrix, Tensor[2, Continuous, Sparse])  # False
+
+isinstance(sparse_matrix, Tensor[2, Continuous, Sparse])  # True
+
+# Subclass relationships
+issubclass(Tensor[2, Continuous, Dense], Tensor[2, None, None])  # True
+issubclass(Tensor[2, Continuous, Dense], Tensor[2, Continuous, None])  # True
+issubclass(Tensor[2, Continuous, Sparse], Tensor[2, None, Dense])  # False
+issubclass(Tensor[2, Continuous, Sparse], Tensor[3, None, None])  # False
+
+# Identity
+id(Tensor[2, Continuous, Dense]) == id(Tensor[2, Continuous, Dense])  # True
+
+# Serialization
+from pickle import dumps, loads
+MatrixType = Tensor[2, Continuous, Dense]
+loaded = loads(dumps(MatrixType))
+print(loaded)  # Tensor[2, Continuous, Dense]
+```
+
+#### Tensor Data Types
+
+<ResponseField name="Continuous" type="TensorData">
+  Floating-point data (NumPy dtype kind 'f').
+  
+  ```python
+  import numpy as np
+  arr = np.array([1.0, 2.5, 3.7])
+  isinstance(arr, Tensor[1, Continuous, None])  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Discrete" type="TensorData">
+  Integer data (NumPy dtype kind 'i').
+  
+  ```python
+  arr = np.array([1, 2, 3])
+  isinstance(arr, Tensor[1, Discrete, None])  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Categorical" type="TensorData">
+  String/Unicode data (NumPy dtype kind 'U').
+  
+  ```python
+  arr = np.array(['cat', 'dog', 'bird'])
+  isinstance(arr, Tensor[1, Categorical, None])  # True
+  ```
+</ResponseField>
+
+#### Tensor Structures
+
+<ResponseField name="Dense" type="TensorStructure">
+  Dense array representation (`numpy.ndarray`).
+  
+  ```python
+  from numpy import ndarray
+  Dense.match(np.zeros((3, 3)))  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Sparse" type="TensorStructure">
+  Sparse matrix representation (`scipy.sparse.spmatrix`).
+  
+  ```python
+  import scipy.sparse as sp
+  Sparse.match(sp.coo_matrix((10, 10)))  # True
+  ```
+</ResponseField>
+
+---
+
+## Type Hierarchies
+
+### Text Types
+
+Natural language semantic types with hierarchical relationships.
+
+```
+Text
+└── Document
+    └── Sentence
+        └── Word
+```
+
+<ResponseField name="Text" type="SemanticType">
+  Base class for all text types. Matches any string.
+  
+  ```python
+  isinstance("any string", Text)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Word" type="Text">
+  A single word (string without spaces or periods).
+  
+  ```python
+  isinstance("hello", Word)  # True
+  isinstance("hello world", Word)  # False
+  ```
+</ResponseField>
+
+<ResponseField name="Sentence" type="Text">
+  A sentence (string with at most one period).
+  
+  ```python
+  isinstance("Hello world", Sentence)  # True
+  isinstance("Hello world.", Sentence)  # True
+  isinstance("Hello. World.", Sentence)  # False
+  ```
+</ResponseField>
+
+<ResponseField name="Document" type="Text">
+  A document (any text, potentially multi-sentence).
+  
+  ```python
+  isinstance("Hello. This is a document.", Document)  # True
+  ```
+</ResponseField>
+
+### Label Types
+
+Semantic types for categorical labels and annotations.
+
+<ResponseField name="Label" type="SemanticType">
+  Base class for all label types. Used for annotations.
+</ResponseField>
+
+<ResponseField name="Postag" type="Label">
+  Part-of-speech tag (e.g., NOUN, VERB).
+</ResponseField>
+
+<ResponseField name="Chunktag" type="Label">
+  Chunk tag for syntactic chunking (e.g., NP, VP).
+</ResponseField>
+
+<ResponseField name="Sentiment" type="Label">
+  Sentiment label (e.g., positive, negative, neutral).
+</ResponseField>
+
+### Other Semantic Types
+
+<ResponseField name="Stem" type="Text">
+  Stemmed form of a word.
+</ResponseField>
+
+<ResponseField name="Synset" type="SemanticType">
+  WordNet synset identifier.
+</ResponseField>
+
+<ResponseField name="FeatureSet" type="SemanticType">
+  Dictionary mapping string keys to feature values.
+  
+  ```python
+  features = {"length": 10, "has_caps": True}
+  isinstance(features, FeatureSet)  # True (simplified check)
+  ```
+</ResponseField>
+
+---
+
+## Predefined Tensor Aliases
+
+Common tensor types have convenient aliases:
+
+### Vector Types (1D)
+
+<ResponseField name="Vector" type="Tensor[1, None, None]">
+  Any 1D array.
+  
+  ```python
+  from autogoal.kb import Vector
+  import numpy as np
+  
+  isinstance(np.array([1, 2, 3]), Vector)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="VectorContinuous" type="Tensor[1, Continuous, None]">
+  1D array of floats.
+  
+  ```python
+  isinstance(np.array([1.0, 2.5]), VectorContinuous)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="VectorDiscrete" type="Tensor[1, Discrete, Dense]">
+  1D array of integers.
+  
+  ```python
+  isinstance(np.array([1, 2, 3]), VectorDiscrete)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="VectorCategorical" type="Tensor[1, Categorical, Dense]">
+  1D array of strings/categories.
+  
+  ```python
+  isinstance(np.array(['A', 'B', 'C']), VectorCategorical)  # True
+  ```
+</ResponseField>
+
+### Matrix Types (2D)
+
+<ResponseField name="Matrix" type="Tensor[2, None, None]">
+  Any 2D array.
+  
+  ```python
+  from autogoal.kb import Matrix
+  isinstance(np.ones((10, 10)), Matrix)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="MatrixContinuous" type="Tensor[2, Continuous, None]">
+  2D array of floats (dense or sparse).
+</ResponseField>
+
+<ResponseField name="MatrixContinuousDense" type="Tensor[2, Continuous, Dense]">
+  Dense 2D array of floats.
+  
+  ```python
+  isinstance(np.random.randn(10, 10), MatrixContinuousDense)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="MatrixContinuousSparse" type="Tensor[2, Continuous, Sparse]">
+  Sparse 2D array of floats.
+  
+  ```python
+  import scipy.sparse as sp
+  isinstance(sp.coo_matrix((10, 10)), MatrixContinuousSparse)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="MatrixDiscrete" type="Tensor[2, Discrete, Dense]">
+  Dense 2D array of integers.
+</ResponseField>
+
+<ResponseField name="MatrixCategorical" type="Tensor[2, Categorical, Dense]">
+  Dense 2D array of strings/categories.
+</ResponseField>
+
+### Higher-Dimensional Tensors
+
+<ResponseField name="Tensor3" type="Tensor[3, Continuous, Dense]">
+  3D dense array of floats.
+  
+  ```python
+  isinstance(np.zeros((10, 10, 3)), Tensor3)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Tensor4" type="Tensor[4, Continuous, Dense]">
+  4D dense array of floats (e.g., image batches).
+  
+  ```python
+  isinstance(np.zeros((32, 224, 224, 3)), Tensor4)  # True
+  ```
+</ResponseField>
+
+---
+
+## Type Checking and Inference
+
+### Custom isinstance Behavior
+
+Semantic types override `isinstance()` to use their `_match()` method:
+
+```python
+from autogoal.kb import Word, Sentence
+
+text = "hello"
+
+# Standard isinstance would fail (Word is not a real superclass of str)
+# But semantic isinstance uses Word._match()
+isinstance(text, Word)  # True
+
+# Hierarchical matching
+isinstance("word", Word)      # True
+isinstance("word", Sentence)  # True (Word ⊂ Sentence)
+isinstance("word", Text)      # True (Word ⊂ Text)
+```
+
+### Custom issubclass Behavior
+
+Semantic types override `issubclass()` to use their `_conforms()` method:
+
+```python
+from autogoal.kb import Word, Sentence, Text, Seq
+
+# Text hierarchy
+issubclass(Word, Sentence)  # True
+issubclass(Sentence, Text)  # True
+issubclass(Word, Text)      # True
+
+# Generic types
+issubclass(Seq[Word], Seq[Sentence])  # True
+issubclass(Seq[Sentence], Seq[Word])  # False
+
+# Tensors
+from autogoal.kb import Tensor, Continuous, Dense
+issubclass(Tensor[2, Continuous, Dense], Tensor[2, None, None])  # True
+```
+
+### Automatic Type Inference
+
+```python
+from autogoal.kb import SemanticType
+import numpy as np
+
+# Infer text types
+SemanticType.infer("hello")  # Word
+SemanticType.infer("Hello world")  # Sentence
+SemanticType.infer("Hello. World.")  # Document
+
+# Infer tensor types
+SemanticType.infer(np.ones((2, 2)))  # Tensor[2, Continuous, Dense]
+SemanticType.infer(np.array([1, 2, 3]))  # Tensor[1, Discrete, Dense]
+```
+
+<Warning>
+Type inference selects the **most specific** matching type. If multiple types match, it chooses the one deepest in the inheritance hierarchy.
+</Warning>
+
+---
+
+## Creating Custom Semantic Types
+
+### Simple Custom Type
+
+```python
+from autogoal.kb import SemanticType
+
+class EmailAddress(SemanticType):
+    @classmethod
+    def _match(cls, x):
+        return isinstance(x, str) and "@" in x and "." in x
+
+# Use it
+email = "user@example.com"
+isinstance(email, EmailAddress)  # True
+isinstance("not-an-email", EmailAddress)  # False
+```
+
+### Generic Custom Type
+
+```python
+from autogoal.kb import SemanticType
+from typing import Type
+
+class Pair(SemanticType):
+    """Generic pair type: Pair[T1, T2]"""
+    
+    __internal_types = {}
+    
+    @classmethod
+    def _specialize(cls, type1: Type[SemanticType], type2: Type[SemanticType]):
+        key = (type1, type2)
+        if key in cls.__internal_types:
+            return cls.__internal_types[key]
+        
+        class PairImp(Pair):
+            __types = (type1, type2)
+            
+            @classmethod
+            def _name(cls):
+                return f"Pair[{type1}, {type2}]"
+            
+            @classmethod
+            def _match(cls, x):
+                if not isinstance(x, tuple) or len(x) != 2:
+                    return False
+                return isinstance(x[0], type1) and isinstance(x[1], type2)
+            
+            @classmethod
+            def _reduce(cls):
+                return Pair._specialize, (type1, type2)
+        
+        cls.__internal_types[key] = PairImp
+        return PairImp
+
+# Use it
+from autogoal.kb import Word, VectorContinuous
+import numpy as np
+
+WordVector = Pair[Word, VectorContinuous]
+data = ("hello", np.array([1.0, 2.0, 3.0]))
+isinstance(data, WordVector)  # True
+```
+
+---
+
+## Serialization and Pickling
+
+Semantic types are fully serializable:
+
+```python
+from autogoal.kb import Seq, Word, Tensor, Continuous, Dense
+import pickle
+
+# Serialize specialized types
+seq_word = Seq[Word]
+data = pickle.dumps(seq_word)
+loaded = pickle.loads(data)
+
+print(loaded)  # Seq[Word]
+print(loaded is seq_word)  # True (same identity!)
+
+# Works with complex types
+matrix_type = Tensor[2, Continuous, Dense]
+data = pickle.dumps(matrix_type)
+loaded = pickle.loads(data)
+print(loaded is matrix_type)  # True
+```
+
+<Info>
+The serialization mechanism uses `_reduce()` to store the specialization parameters, ensuring deserialized types maintain singleton identity.
+</Info>
+
+---
+
+## JSON Serialization
+
+Some semantic types provide JSON serialization for data:
+
+```python
+from autogoal.kb import Tensor
+import numpy as np
+
+# Serialize tensor data to JSON
+data = np.array([[1, 2], [3, 4]])
+json_str = Tensor.to_json(None, data)
+print(json_str)  # '[[1, 2], [3, 4]]'
+
+# Deserialize
+loaded = Tensor.from_json(None, json_str)
+print(loaded)  # array([[1, 2], [3, 4]])
+```
+
+---
+
+## Best Practices
+
+### When to Use Semantic Types
+
+<Accordion title="Use semantic types when...">
+  - **Algorithm selection matters**: Different algorithms should apply based on data meaning
+  - **Type safety helps**: You want compile-time guarantees about pipeline compatibility
+  - **Documentation is important**: Types serve as self-documenting interfaces
+  - **Automatic composition**: You're building pipelines automatically
+</Accordion>
+
+### When NOT to Use Semantic Types
+
+<Accordion title="Don't use semantic types when...">
+  - **Simple scripts**: Overhead isn't worth it for one-off analysis
+  - **Performance critical**: Type checking adds minimal but nonzero overhead
+  - **No ambiguity**: Structural types are already sufficient
+</Accordion>
+
+### Naming Conventions
+
+- **Concrete types**: Use noun phrases (`Word`, `Document`, `MatrixContinuousDense`)
+- **Generic types**: Use generic names with brackets (`Seq[T]`, `Tensor[dim, dtype, structure]`)
+- **Modifiers**: Use descriptive suffixes (`Continuous`, `Dense`, `Sparse`)
+
+---
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Algorithm Classes" icon="code" href="/api/kb/algorithms">
+    Learn how algorithms use semantic types
+  </Card>
+  <Card title="Data Types Reference" icon="database" href="/api/kb/data-types">
+    Complete list of built-in semantic types
+  </Card>
+  <Card title="Custom Algorithms" icon="wrench" href="/guides/custom-algorithms">
+    Create algorithms with custom semantic types
+  </Card>
+  <Card title="Pipeline Concepts" icon="sitemap" href="/concepts/pipelines">
+    Understand how semantic types enable pipeline composition
+  </Card>
+</CardGroup>

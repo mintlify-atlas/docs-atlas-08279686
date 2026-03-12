@@ -1,0 +1,520 @@
+---
+title: Custom Pipelines
+description: Build and customize machine learning pipelines manually for fine-grained control
+---
+
+## Overview
+
+While AutoML automatically searches for the best pipeline, sometimes you need more control over the pipeline structure. AutoGOAL allows you to build custom pipelines manually by composing individual algorithms.
+
+<Note>
+  Custom pipelines give you full control over the sequence of transformations and models, while still benefiting from AutoGOAL's semantic type system.
+</Note>
+
+## Understanding Pipelines
+
+A `Pipeline` in AutoGOAL is a sequence of algorithms where:
+
+- Each algorithm has a `run` method with typed inputs and outputs
+- Output from one algorithm flows to the next compatible algorithm
+- The pipeline manages data flow based on semantic types
+
+```python
+from autogoal.kb import Pipeline
+
+# A pipeline is a list of algorithms
+pipeline = Pipeline(
+    algorithms=[algorithm1, algorithm2, algorithm3],
+    input_types=[InputType]
+)
+
+# Run the pipeline
+result = pipeline.run(input_data)
+```
+
+## Basic Pipeline Construction
+
+Here's a simple example of building a custom pipeline:
+
+```python
+from autogoal.kb import Pipeline, AlgorithmBase
+
+# Define custom algorithm components
+class Float2Str(AlgorithmBase):
+    def run(self, a: float) -> str:
+        return str(a)
+
+class StrToInt(AlgorithmBase):
+    def run(self, b: str) -> int:
+        return len(b)
+
+# Build the pipeline
+pipeline = Pipeline(
+    algorithms=[Float2Str(), StrToInt()],
+    input_types=[float]
+)
+
+# Execute the pipeline
+result = pipeline.run(3.14159)
+print(result)  # Output: 7 (length of "3.14159")
+```
+
+## Pipeline for Classification
+
+Here's how to build a custom classification pipeline:
+
+```python
+from autogoal.kb import Pipeline
+from autogoal.contrib.sklearn import (
+    StandardScaler,
+    PCA, 
+    RandomForestClassifier
+)
+import numpy as np
+
+# Create sample data
+X_train = np.random.randn(100, 20)
+y_train = np.random.randint(0, 2, 100)
+
+# Define the pipeline steps manually
+scaler = StandardScaler()
+pca = PCA(n_components=10)
+classifier = RandomForestClassifier(n_estimators=100)
+
+# Build custom pipeline
+pipeline = Pipeline(
+    algorithms=[scaler, pca, classifier],
+    input_types=[type(X_train)]
+)
+
+# Train the pipeline
+pipeline.send("train")  # Set to training mode
+pipeline.run(X_train, y_train)
+
+# Make predictions
+pipeline.send("eval")  # Set to evaluation mode
+X_test = np.random.randn(20, 20)
+predictions = pipeline.run(X_test)
+
+print(f"Predictions: {predictions}")
+```
+
+## Pipeline for Regression
+
+```python
+from autogoal.kb import Pipeline
+from autogoal.contrib.sklearn import (
+    MinMaxScaler,
+    PolynomialFeatures,
+    Ridge
+)
+import numpy as np
+
+# Create sample regression data
+X_train = np.random.randn(100, 5)
+y_train = X_train.sum(axis=1) + np.random.randn(100) * 0.1
+
+# Build custom regression pipeline
+scaler = MinMaxScaler()
+polyfeatures = PolynomialFeatures(degree=2)
+regressor = Ridge(alpha=1.0)
+
+pipeline = Pipeline(
+    algorithms=[scaler, polyfeatures, regressor],
+    input_types=[type(X_train)]
+)
+
+# Train
+pipeline.send("train")
+pipeline.run(X_train, y_train)
+
+# Predict
+pipeline.send("eval")
+X_test = np.random.randn(10, 5)
+predictions = pipeline.run(X_test)
+
+print(f"Predictions shape: {predictions.shape}")
+```
+
+## Using Pipelines with AutoML's Search
+
+You can use AutoML's search capabilities with custom pipeline spaces:
+
+```python
+from autogoal.kb import build_pipeline_graph, MatrixContinuousDense, VectorCategorical
+from autogoal.contrib import find_classes
+from autogoal.search import PESearch
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Create data
+X = np.random.randn(200, 10)
+y = np.random.randint(0, 3, 200)
+X_train, X_test, y_train, y_test = train_test_split(X, y)
+
+# Get available algorithms
+registry = find_classes()
+
+# Build a pipeline search space
+pipeline_space = build_pipeline_graph(
+    input_types=[MatrixContinuousDense],
+    output_type=VectorCategorical,
+    registry=registry
+)
+
+# Define fitness function
+def fitness(pipeline):
+    pipeline.send("train")
+    pipeline.run(X_train, y_train)
+    pipeline.send("eval")
+    y_pred = pipeline.run(X_test)
+    return (y_pred == y_test).mean()
+
+# Search for best pipeline
+search = PESearch(pipeline_space, fitness, random_state=42)
+best_pipelines, best_scores = search.run(100)
+
+print(f"Best score: {best_scores[0]}")
+print(f"Best pipeline: {best_pipelines[0]}")
+```
+
+## Multi-Input Pipelines
+
+Pipelines can handle multiple inputs:
+
+```python
+from autogoal.kb import Pipeline, AlgorithmBase
+
+class TwoInputAlgorithm(AlgorithmBase):
+    def run(self, a: int, b: str) -> int:
+        return a * len(b)
+
+# Pipeline with multiple input types
+pipeline = Pipeline(
+    algorithms=[TwoInputAlgorithm()],
+    input_types=[int, str]
+)
+
+result = pipeline.run(5, "hello")
+print(result)  # Output: 25 (5 * len("hello"))
+```
+
+## Pipeline with Intermediate Outputs
+
+Data flows through the pipeline based on semantic types:
+
+```python
+from autogoal.kb import Pipeline, AlgorithmBase
+
+class StrToInt(AlgorithmBase):
+    def run(self, s: str) -> int:
+        return len(s)
+
+class TwoInputAlgorithm(AlgorithmBase):
+    """Takes both the original string and the derived int"""
+    def run(self, a: int, b: str) -> int:
+        return a * len(b)
+
+# The second algorithm gets both:
+# - The int from StrToInt
+# - The original str input
+pipeline = Pipeline(
+    algorithms=[StrToInt(), TwoInputAlgorithm()],
+    input_types=[str]
+)
+
+result = pipeline.run("hello")
+print(result)  # Output: 25 (len("hello") * len("hello"))
+```
+
+## Saving and Loading Custom Pipelines
+
+```python
+from autogoal.kb import Pipeline
+from pathlib import Path
+
+# Serialize pipeline to string
+serialized = pipeline.serialize()
+
+# Save to file
+with open("pipeline.pkl", "wb") as f:
+    f.write(serialized)
+
+# Load from file
+with open("pipeline.pkl", "rb") as f:
+    serialized_data = f.read()
+
+# Deserialize
+loaded_pipeline = Pipeline.deserialize(serialized_data)
+
+# Use the loaded pipeline
+predictions = loaded_pipeline.run(X_test)
+```
+
+## Advanced: Custom Algorithm Components
+
+Create your own algorithm components:
+
+```python
+from autogoal.kb import AlgorithmBase, algorithm
+from autogoal.grammar import Continuous, Discrete, Categorical
+import numpy as np
+
+class CustomPreprocessor(AlgorithmBase):
+    """Custom preprocessing algorithm with hyperparameters"""
+    
+    def __init__(
+        self,
+        strategy: Categorical("mean", "median", "zero"),
+        scale: Continuous(0.1, 10.0),
+        threshold: Discrete(1, 100)
+    ):
+        self.strategy = strategy
+        self.scale = scale
+        self.threshold = threshold
+        
+    def run(self, X: np.ndarray) -> np.ndarray:
+        # Custom preprocessing logic
+        if self.strategy == "mean":
+            X = X - X.mean(axis=0)
+        elif self.strategy == "median":
+            X = X - np.median(X, axis=0)
+        else:
+            X = X - 0
+            
+        X = X * self.scale
+        X = np.clip(X, -self.threshold, self.threshold)
+        
+        return X
+
+# Use in a pipeline
+from autogoal.contrib.sklearn import LogisticRegression
+
+pipeline = Pipeline(
+    algorithms=[
+        CustomPreprocessor(strategy="mean", scale=1.5, threshold=10),
+        LogisticRegression()
+    ],
+    input_types=[np.ndarray]
+)
+```
+
+## Comparing AutoML vs Manual Pipelines
+
+<CodeGroup>
+```python AutoML (Automatic)
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+
+# AutoML searches for the best pipeline
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=100
+)
+
+automl.fit(X_train, y_train)
+predictions = automl.predict(X_test)
+
+# AutoML found the best combination
+print(f"Best pipeline: {automl.best_pipelines_[0]}")
+```
+
+```python Manual Pipeline
+from autogoal.kb import Pipeline
+from autogoal.contrib.sklearn import StandardScaler, SVC
+
+# Manually define the exact pipeline
+pipeline = Pipeline(
+    algorithms=[
+        StandardScaler(),
+        SVC(kernel="rbf", C=1.0)
+    ],
+    input_types=[type(X_train)]
+)
+
+# Train and predict
+pipeline.send("train")
+pipeline.run(X_train, y_train)
+pipeline.send("eval")
+predictions = pipeline.run(X_test)
+
+# You have full control over each step
+print(f"Custom pipeline: {pipeline}")
+```
+</CodeGroup>
+
+## When to Use Custom Pipelines
+
+Use custom pipelines when:
+
+<CardGroup cols={2}>
+  <Card title="Domain Knowledge" icon="brain">
+    You know exactly which transformations and models work best for your domain
+  </Card>
+  
+  <Card title="Debugging" icon="bug">
+    You need to debug or understand each step of the pipeline
+  </Card>
+  
+  <Card title="Production Constraints" icon="lock">
+    You have constraints on which algorithms can be used in production
+  </Card>
+  
+  <Card title="Rapid Prototyping" icon="rocket">
+    You want to quickly test a specific approach without searching
+  </Card>
+</CardGroup>
+
+Use AutoML when:
+
+<CardGroup cols={2}>
+  <Card title="Exploration" icon="compass">
+    You're exploring a new problem and don't know what works best
+  </Card>
+  
+  <Card title="Optimization" icon="chart-line">
+    You want to automatically tune hyperparameters and find the optimal configuration
+  </Card>
+  
+  <Card title="Multiple Problems" icon="clone">
+    You're solving many similar problems and want automation
+  </Card>
+  
+  <Card title="Baseline" icon="flag">
+    You want a strong baseline to compare your custom solutions against
+  </Card>
+</CardGroup>
+
+## Hybrid Approach
+
+Combine both approaches for the best results:
+
+```python
+from autogoal.ml import AutoML
+from autogoal.kb import Pipeline
+from autogoal.contrib.sklearn import StandardScaler
+
+# Step 1: Use AutoML to discover good pipelines
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=200
+)
+
+automl.fit(X_train, y_train)
+
+# Step 2: Inspect the best pipeline
+print("AutoML found:")
+for i, alg in enumerate(automl.best_pipelines_[0].algorithms):
+    print(f"  Step {i+1}: {alg}")
+
+# Step 3: Build a custom pipeline based on insights
+# Maybe you always want StandardScaler first
+custom_pipeline = Pipeline(
+    algorithms=[
+        StandardScaler(),  # Your domain requirement
+        # ... then use algorithms from AutoML's best pipeline
+    ],
+    input_types=[MatrixContinuousDense]
+)
+
+# Step 4: Fine-tune your custom pipeline
+custom_pipeline.send("train")
+custom_pipeline.run(X_train, y_train)
+```
+
+## Pipeline Composition Patterns
+
+<Steps>
+  <Step title="Feature Extraction">
+    Start with algorithms that transform raw data into features
+    
+    ```python
+    from autogoal.contrib.sklearn import TfidfVectorizer, CountVectorizer
+    
+    # For text data
+    pipeline = Pipeline(
+        algorithms=[TfidfVectorizer(), ...],
+        input_types=[list]  # list of strings
+    )
+    ```
+  </Step>
+  
+  <Step title="Feature Selection/Reduction">
+    Add dimensionality reduction or feature selection
+    
+    ```python
+    from autogoal.contrib.sklearn import PCA, SelectKBest
+    
+    pipeline = Pipeline(
+        algorithms=[feature_extractor, PCA(n_components=50), ...],
+        input_types=[...]
+    )
+    ```
+  </Step>
+  
+  <Step title="Scaling/Normalization">
+    Normalize features for algorithms that require it
+    
+    ```python
+    from autogoal.contrib.sklearn import StandardScaler, MinMaxScaler
+    
+    pipeline = Pipeline(
+        algorithms=[..., StandardScaler(), ...],
+        input_types=[...]
+    )
+    ```
+  </Step>
+  
+  <Step title="Model Training">
+    End with your classification or regression model
+    
+    ```python
+    from autogoal.contrib.sklearn import RandomForestClassifier
+    
+    pipeline = Pipeline(
+        algorithms=[..., RandomForestClassifier()],
+        input_types=[...]
+    )
+    ```
+  </Step>
+</Steps>
+
+## Tips for Building Custom Pipelines
+
+<Note>
+  **Match semantic types**: Ensure the output type of each algorithm matches the expected input type of the next algorithm.
+</Note>
+
+<Note>
+  **Use `send()` for modes**: Call `pipeline.send("train")` before training and `pipeline.send("eval")` before prediction.
+</Note>
+
+<Note>
+  **Start simple**: Begin with 2-3 algorithms and gradually add complexity.
+</Note>
+
+<Warning>
+  Custom pipelines don't automatically tune hyperparameters. You need to set them manually or use AutoML to find good values first.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AutoML Overview" icon="wand-magic-sparkles" href="/automl/overview">
+    Return to AutoML basics
+  </Card>
+  
+  <Card title="Semantic Types" icon="tags" href="/concepts/semantic-types">
+    Understand the type system for pipelines
+  </Card>
+  
+  <Card title="Algorithm API" icon="code" href="/api/kb/algorithms">
+    Learn how to create custom algorithms
+  </Card>
+  
+  <Card title="Search Algorithms" icon="magnifying-glass" href="/concepts/optimization">
+    Explore different search strategies
+  </Card>
+</CardGroup>

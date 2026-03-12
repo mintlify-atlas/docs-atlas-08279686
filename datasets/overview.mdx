@@ -1,0 +1,149 @@
+---
+title: Datasets Overview
+description: Built-in datasets for machine learning experimentation in AutoGOAL
+---
+
+AutoGOAL provides a comprehensive collection of built-in datasets for various machine learning tasks. These datasets are automatically downloaded and cached locally, making it easy to experiment with different problem domains.
+
+## Dataset Module
+
+The `autogoal.datasets` module provides utilities for loading and managing datasets:
+
+```python
+from autogoal.datasets import datapath, download
+```
+
+### Key Functions
+
+<CardGroup cols={2}>
+  <Card title="datapath()" icon="folder">
+    Returns a `Path` object pointing to the dataset storage location
+  </Card>
+  <Card title="download()" icon="download">
+    Downloads and caches datasets automatically from remote sources
+  </Card>
+  <Card title="get_datasets_list()" icon="list">
+    Retrieves the list of available datasets from the metadata repository
+  </Card>
+  <Card title="unpack()" icon="box-open">
+    Unpacks compressed dataset archives
+  </Card>
+</CardGroup>
+
+## Dataset Categories
+
+AutoGOAL includes datasets spanning multiple domains:
+
+<Accordion title="Classification Datasets">
+  Datasets for binary and multi-class classification tasks:
+  - **Abalone**: Predict abalone age from physical measurements
+  - **Cars**: Car evaluation based on attributes
+  - **CIFAR-10**: Image classification with 10 classes
+  - **Dorothea**: High-dimensional binary classification
+  - **German Credit**: Credit risk assessment
+  - **Gisette**: Handwritten digit recognition (binary)
+  - **Movie Reviews**: Sentiment analysis (positive/negative)
+  - **Shuttle**: Space shuttle component classification
+  - **Yeast**: Protein localization site prediction
+</Accordion>
+
+<Accordion title="Regression Datasets">
+  Datasets for predicting continuous values:
+  - **Wine Quality**: Predict wine quality scores from chemical properties
+  - **HAHA**: Humor funniness rating prediction
+</Accordion>
+
+<Accordion title="Natural Language Processing">
+  Text-based datasets for NLP tasks:
+  - **HAHA 2019**: Spanish humor detection and rating
+  - **MEDDOCAN**: Medical document anonymization (NER)
+  - **Movie Reviews**: Sentiment classification
+</Accordion>
+
+<Accordion title="Image Classification">
+  Computer vision datasets:
+  - **CIFAR-10**: 32x32 color images in 10 classes
+</Accordion>
+
+<Accordion title="Synthetic/Testing Datasets">
+  Datasets for quick testing and prototyping:
+  - **Dummy**: Generate random synthetic data
+</Accordion>
+
+## Data Storage
+
+Datasets are automatically downloaded and cached in the user's home directory:
+
+```python
+from autogoal.datasets import datapath
+
+# Default storage location: ~/.autogoal/data/
+path = datapath("movie_reviews")
+print(path)  # PosixPath('/home/user/.autogoal/data/movie_reviews')
+```
+
+<Note>
+  Datasets are downloaded only once and cached locally. Subsequent calls to `load()` will use the cached version.
+</Note>
+
+## Typical Usage Pattern
+
+Most datasets follow a consistent loading pattern:
+
+```python
+from autogoal.datasets import <dataset_name>
+
+# Load the dataset
+X_train, y_train, X_test, y_test = <dataset_name>.load()
+
+# Use with AutoGOAL
+from autogoal.ml import AutoML
+
+automl = AutoML()
+automl.fit(X_train, y_train)
+score = automl.score(X_test, y_test)
+```
+
+## Dataset Metadata
+
+AutoGOAL maintains a remote metadata file that tracks available datasets and their download URLs:
+
+```python
+from autogoal.datasets import get_datasets_list
+
+# Get all available datasets
+datasets = get_datasets_list()
+print(datasets.keys())
+```
+
+The metadata is fetched from:
+```
+https://raw.githubusercontent.com/autogoal/datasets/master/datasets.json
+```
+
+<Note>
+  If you're offline, AutoGOAL will use a locally cached version of the datasets metadata.
+</Note>
+
+## Error Handling
+
+Datasets include built-in error handling for network issues:
+
+```python
+try:
+    X, y = some_dataset.load()
+except Exception as e:
+    print("Error loading data. Check your connection.")
+    print("Delete partially downloaded files and retry.")
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Built-in Datasets" icon="database" href="/datasets/built-in">
+    Explore detailed documentation for each dataset
+  </Card>
+  <Card title="AutoML Guide" icon="robot" href="/automl/overview">
+    Learn how to use datasets with AutoML
+  </Card>
+</CardGroup>

@@ -1,0 +1,921 @@
+---
+title: "Built-in Data Types"
+description: "Complete reference for AutoGOAL's built-in semantic data types"
+---
+
+## Overview
+
+AutoGOAL provides a rich set of built-in semantic types for common machine learning data. These types are used to annotate algorithm inputs and outputs, enabling automatic pipeline composition.
+
+<Info>
+All types listed here are imported from `autogoal.kb`.
+</Info>
+
+```python
+from autogoal.kb import (
+    # Text types
+    Text, Word, Sentence, Document,
+    # Label types
+    Label, Postag, Chunktag, Sentiment,
+    # Tensor types
+    Vector, Matrix, Tensor,
+    VectorContinuous, VectorCategorical, VectorDiscrete,
+    MatrixContinuousDense, MatrixContinuousSparse,
+    # Generic types
+    Seq, Supervised
+)
+```
+
+---
+
+## Text Types
+
+Semantic types for natural language processing.
+
+### Type Hierarchy
+
+```
+Text (base)
+└── Document
+    └── Sentence
+        └── Word
+```
+
+<Info>
+All text types are **covariant**: a `Word` can be used where `Sentence` is expected, and `Sentence` can be used where `Document` is expected.
+</Info>
+
+---
+
+### Text
+
+<ParamField path="Text" type="SemanticType">
+  Base class for all textual data. Matches any string.
+</ParamField>
+
+**Matching Rule**: Any Python `str`
+
+**Example Usage**:
+```python
+from autogoal.kb import Text, AlgorithmBase
+
+class TextNormalizer(AlgorithmBase):
+    def run(self, text: Text) -> Text:
+        return text.lower().strip()
+
+# Matches any string
+isinstance("Hello", Text)  # True
+isinstance("Hello. World.", Text)  # True
+isinstance("word", Text)  # True
+```
+
+**Common Use Cases**:
+- Generic text processing algorithms
+- Base type for text transformations
+- Input type when any text format is acceptable
+
+---
+
+### Word
+
+<ParamField path="Word" type="Text">
+  A single word without spaces or periods.
+</ParamField>
+
+**Matching Rule**: String with no spaces and no periods
+
+**Example Usage**:
+```python
+from autogoal.kb import Word, Stem, AlgorithmBase
+
+class Stemmer(AlgorithmBase):
+    def run(self, word: Word) -> Stem:
+        # Apply Porter stemming
+        return stem(word)
+
+# Type checking
+isinstance("hello", Word)  # True
+isinstance("hello-world", Word)  # True (hyphen is OK)
+isinstance("hello world", Word)  # False (has space)
+isinstance("hello.", Word)  # False (has period)
+```
+
+**Common Use Cases**:
+- Stemming algorithms
+- Word embeddings
+- Character-level processing
+- Morphological analysis
+
+---
+
+### Sentence
+
+<ParamField path="Sentence" type="Document">
+  A single sentence with at most one period.
+</ParamField>
+
+**Matching Rule**: String with at most one period
+
+**Example Usage**:
+```python
+from autogoal.kb import Sentence, Seq, Word, AlgorithmBase
+
+class SentenceTokenizer(AlgorithmBase):
+    def run(self, sentence: Sentence) -> Seq[Word]:
+        return sentence.split()
+
+# Type checking
+isinstance("Hello world", Sentence)  # True
+isinstance("Hello world.", Sentence)  # True
+isinstance("Hello. World.", Sentence)  # False (two periods)
+```
+
+**Common Use Cases**:
+- Sentence-level tokenization
+- Part-of-speech tagging
+- Named entity recognition
+- Dependency parsing
+
+---
+
+### Document
+
+<ParamField path="Document" type="Text">
+  A text document that may contain multiple sentences.
+</ParamField>
+
+**Matching Rule**: Any string (alias for `Text` with semantic distinction)
+
+**Example Usage**:
+```python
+from autogoal.kb import Document, Seq, Sentence, AlgorithmBase
+
+class SentenceSplitter(AlgorithmBase):
+    def run(self, doc: Document) -> Seq[Sentence]:
+        return doc.split('. ')
+
+# Type checking
+isinstance("Hello. This is a document.", Document)  # True
+isinstance("Single sentence", Document)  # True
+```
+
+**Common Use Cases**:
+- Document classification
+- Topic modeling
+- Summarization
+- Information extraction
+
+---
+
+### Stem
+
+<ParamField path="Stem" type="Text">
+  The stemmed or lemmatized form of a word.
+</ParamField>
+
+**Matching Rule**: Any string (semantic meaning only)
+
+**Example Usage**:
+```python
+from autogoal.kb import Word, Stem, AlgorithmBase
+
+class PorterStemmer(AlgorithmBase):
+    def run(self, word: Word) -> Stem:
+        # Stemming logic
+        return stemmed_form
+```
+
+**Common Use Cases**:
+- Output type for stemming/lemmatization
+- Input for stem-based indexing
+
+---
+
+## Label Types
+
+Semantic types for categorical labels and annotations.
+
+### Label
+
+<ParamField path="Label" type="SemanticType">
+  Base class for all label types.
+</ParamField>
+
+**Matching Rule**: None (abstract type)
+
+**Common Use Cases**:
+- Generic classification outputs
+- Annotation types
+
+---
+
+### Postag
+
+<ParamField path="Postag" type="Label">
+  Part-of-speech tag (e.g., NOUN, VERB, ADJ).
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Word, Postag, AlgorithmBase
+
+class POSTagger(AlgorithmBase):
+    def run(self, word: Word) -> Postag:
+        # POS tagging logic
+        return tag  # e.g., "NOUN"
+```
+
+**Common Values**: NOUN, VERB, ADJ, ADV, PRON, DET, etc.
+
+---
+
+### Chunktag
+
+<ParamField path="Chunktag" type="Label">
+  Syntactic chunk tag (e.g., NP, VP, PP).
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Sentence, Seq, Chunktag, AlgorithmBase
+
+class ChunkParser(AlgorithmBase):
+    def run(self, sentence: Sentence) -> Seq[Chunktag]:
+        # Chunking logic
+        return chunks  # e.g., ["NP", "VP", "NP"]
+```
+
+**Common Values**: NP (noun phrase), VP (verb phrase), PP (prepositional phrase)
+
+---
+
+### Sentiment
+
+<ParamField path="Sentiment" type="Label">
+  Sentiment label (positive, negative, neutral).
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Document, Sentiment, AlgorithmBase
+
+class SentimentAnalyzer(AlgorithmBase):
+    def run(self, doc: Document) -> Sentiment:
+        # Sentiment analysis logic
+        return "positive"  # or "negative", "neutral"
+```
+
+**Common Values**: positive, negative, neutral, very_positive, very_negative
+
+---
+
+## Tensor Types
+
+Multi-dimensional array types with semantic annotations.
+
+### Type Parameters
+
+All tensor types are specialized with three parameters:
+
+1. **Dimensionality** (`int | None`): Number of axes (1, 2, 3, 4, or `None` for any)
+2. **Data Type** (`TensorData | None`):
+   - `Continuous`: Floating-point values
+   - `Discrete`: Integer values
+   - `Categorical`: String/category values
+3. **Structure** (`TensorStructure | None`):
+   - `Dense`: NumPy array
+   - `Sparse`: SciPy sparse matrix
+
+### Tensor Modifiers
+
+<ResponseField name="Continuous" type="TensorData">
+  Floating-point data type flag (NumPy dtype kind 'f').
+  
+  ```python
+  from autogoal.kb import Continuous
+  import numpy as np
+  
+  arr = np.array([1.0, 2.5, 3.7])
+  print(arr.dtype.kind)  # 'f'
+  Continuous.match(arr)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Discrete" type="TensorData">
+  Integer data type flag (NumPy dtype kind 'i').
+  
+  ```python
+  from autogoal.kb import Discrete
+  
+  arr = np.array([1, 2, 3])
+  Discrete.match(arr)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Categorical" type="TensorData">
+  String/Unicode data type flag (NumPy dtype kind 'U').
+  
+  ```python
+  from autogoal.kb import Categorical
+  
+  arr = np.array(['cat', 'dog', 'bird'])
+  Categorical.match(arr)  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Dense" type="TensorStructure">
+  Dense array structure flag (NumPy ndarray).
+  
+  ```python
+  from autogoal.kb import Dense
+  
+  Dense.match(np.zeros((10, 10)))  # True
+  ```
+</ResponseField>
+
+<ResponseField name="Sparse" type="TensorStructure">
+  Sparse matrix structure flag (SciPy sparse matrix).
+  
+  ```python
+  from autogoal.kb import Sparse
+  import scipy.sparse as sp
+  
+  Sparse.match(sp.coo_matrix((10, 10)))  # True
+  ```
+</ResponseField>
+
+---
+
+## Vector Types (1D)
+
+### Vector
+
+<ParamField path="Vector" type="Tensor[1, None, None]">
+  Any 1-dimensional array, regardless of data type or structure.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Vector, AlgorithmBase
+import numpy as np
+
+class VectorNormalizer(AlgorithmBase):
+    def run(self, v: Vector) -> Vector:
+        return v / np.linalg.norm(v)
+
+# Matches any 1D array
+isinstance(np.array([1, 2, 3]), Vector)  # True
+isinstance(np.array([1.0, 2.0]), Vector)  # True
+isinstance(np.array(['a', 'b']), Vector)  # True
+```
+
+---
+
+### VectorContinuous
+
+<ParamField path="VectorContinuous" type="Tensor[1, Continuous, None]">
+  1-dimensional array of floating-point numbers.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import VectorContinuous, AlgorithmBase
+
+class Scaler(AlgorithmBase):
+    def run(self, v: VectorContinuous) -> VectorContinuous:
+        return (v - v.mean()) / v.std()
+
+# Type checking
+import numpy as np
+isinstance(np.array([1.0, 2.5, 3.7]), VectorContinuous)  # True
+isinstance(np.array([1, 2, 3]), VectorContinuous)  # False (integers)
+```
+
+**Common Use Cases**:
+- Feature vectors
+- Embeddings
+- Probability distributions
+- Continuous predictions
+
+---
+
+### VectorDiscrete
+
+<ParamField path="VectorDiscrete" type="Tensor[1, Discrete, Dense]">
+  1-dimensional dense array of integers.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import VectorDiscrete, AlgorithmBase
+
+class BinCounter(AlgorithmBase):
+    def run(self, v: VectorDiscrete) -> VectorDiscrete:
+        return np.bincount(v)
+
+isinstance(np.array([1, 2, 3]), VectorDiscrete)  # True
+isinstance(np.array([1.0, 2.0]), VectorDiscrete)  # False
+```
+
+**Common Use Cases**:
+- Integer labels
+- Count data
+- Discrete features
+
+---
+
+### VectorCategorical
+
+<ParamField path="VectorCategorical" type="Tensor[1, Categorical, Dense]">
+  1-dimensional dense array of strings or categories.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import VectorCategorical, AlgorithmBase
+from autogoal.kb import MatrixContinuousDense, Supervised
+
+class Classifier(AlgorithmBase):
+    def run(self,
+            X: MatrixContinuousDense,
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Classification logic
+        return predictions
+
+isinstance(np.array(['cat', 'dog', 'bird']), VectorCategorical)  # True
+```
+
+**Common Use Cases**:
+- Classification labels
+- Category predictions
+- Named categories
+
+---
+
+## Matrix Types (2D)
+
+### Matrix
+
+<ParamField path="Matrix" type="Tensor[2, None, None]">
+  Any 2-dimensional array, regardless of data type or structure.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Matrix, AlgorithmBase
+
+class MatrixTranspose(AlgorithmBase):
+    def run(self, m: Matrix) -> Matrix:
+        return m.T
+
+# Matches any 2D array
+import numpy as np
+import scipy.sparse as sp
+
+isinstance(np.zeros((10, 10)), Matrix)  # True
+isinstance(sp.coo_matrix((10, 10)), Matrix)  # True
+```
+
+---
+
+### MatrixContinuous
+
+<ParamField path="MatrixContinuous" type="Tensor[2, Continuous, None]">
+  2-dimensional array of floats (dense or sparse).
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import MatrixContinuous, VectorContinuous, AlgorithmBase
+
+class PCA(AlgorithmBase):
+    def run(self, X: MatrixContinuous) -> MatrixContinuous:
+        # PCA transformation
+        return transformed_X
+```
+
+---
+
+### MatrixContinuousDense
+
+<ParamField path="MatrixContinuousDense" type="Tensor[2, Continuous, Dense]">
+  Dense 2-dimensional array of floating-point numbers.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+from autogoal.kb import Supervised, AlgorithmBase
+
+class LogisticRegression(AlgorithmBase):
+    def run(self,
+            X: MatrixContinuousDense,
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Training and prediction
+        return predictions
+
+# Type checking
+import numpy as np
+isinstance(np.random.randn(100, 10), MatrixContinuousDense)  # True
+```
+
+**Common Use Cases**:
+- Feature matrices
+- Training data
+- Dense embeddings
+- Image features
+
+<Info>
+**Most Common Type**: `MatrixContinuousDense` is the most frequently used type for tabular machine learning data.
+</Info>
+
+---
+
+### MatrixContinuousSparse
+
+<ParamField path="MatrixContinuousSparse" type="Tensor[2, Continuous, Sparse]">
+  Sparse 2-dimensional array of floating-point numbers.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import MatrixContinuousSparse, AlgorithmBase
+import scipy.sparse as sp
+
+class TfidfVectorizer(AlgorithmBase):
+    def run(self, docs: Seq[Document]) -> MatrixContinuousSparse:
+        # TF-IDF vectorization
+        return tfidf_matrix  # sparse matrix
+
+# Type checking
+isinstance(sp.csr_matrix((1000, 5000)), MatrixContinuousSparse)  # True
+```
+
+**Common Use Cases**:
+- TF-IDF vectors
+- One-hot encodings
+- High-dimensional sparse features
+- Text data representations
+
+---
+
+### MatrixDiscrete
+
+<ParamField path="MatrixDiscrete" type="Tensor[2, Discrete, Dense]">
+  Dense 2-dimensional array of integers.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import MatrixDiscrete, AlgorithmBase
+
+class CountMatrix(AlgorithmBase):
+    def run(self, data: Seq[Seq[int]]) -> MatrixDiscrete:
+        return np.array(data, dtype=int)
+
+isinstance(np.array([[1, 2], [3, 4]]), MatrixDiscrete)  # True
+```
+
+**Common Use Cases**:
+- Count matrices
+- Integer-encoded features
+- Adjacency matrices
+
+---
+
+### MatrixCategorical
+
+<ParamField path="MatrixCategorical" type="Tensor[2, Categorical, Dense]">
+  Dense 2-dimensional array of strings or categories.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import MatrixCategorical, AlgorithmBase
+
+class CategoricalEncoder(AlgorithmBase):
+    def run(self, X: MatrixCategorical) -> MatrixContinuousDense:
+        # Encode categories as numbers
+        return encoded_X
+
+isinstance(np.array([['A', 'B'], ['C', 'D']]), MatrixCategorical)  # True
+```
+
+**Common Use Cases**:
+- Categorical feature matrices
+- Multi-label categories
+
+---
+
+## Higher-Dimensional Tensors
+
+### Tensor3
+
+<ParamField path="Tensor3" type="Tensor[3, Continuous, Dense]">
+  3-dimensional dense array of floats.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Tensor3, AlgorithmBase
+
+class ImageBatchNormalizer(AlgorithmBase):
+    def run(self, images: Tensor3) -> Tensor3:
+        # Normalize batch of grayscale images
+        return (images - images.mean()) / images.std()
+
+isinstance(np.zeros((100, 28, 28)), Tensor3)  # True (batch of 28x28 images)
+```
+
+**Common Use Cases**:
+- Batches of grayscale images (batch, height, width)
+- Time series with features (samples, timesteps, features)
+- Video frames (time, height, width)
+
+---
+
+### Tensor4
+
+<ParamField path="Tensor4" type="Tensor[4, Continuous, Dense]">
+  4-dimensional dense array of floats.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Tensor4, VectorCategorical, AlgorithmBase
+
+class CNN(AlgorithmBase):
+    def run(self,
+            images: Tensor4,
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # CNN training and prediction
+        return predictions
+
+isinstance(np.zeros((32, 224, 224, 3)), Tensor4)  # True (batch of RGB images)
+```
+
+**Common Use Cases**:
+- Batches of color images (batch, height, width, channels)
+- Video data (batch, time, height, width)
+- 3D medical imaging (batch, depth, height, width)
+
+---
+
+## Generic Types
+
+### Seq[T]
+
+<ParamField path="Seq[T]" type="SemanticType">
+  Generic sequence (list/tuple) of elements of type T.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Seq, Word, Document, AlgorithmBase
+
+class Tokenizer(AlgorithmBase):
+    def run(self, doc: Document) -> Seq[Word]:
+        return doc.split()
+
+# Type checking
+isinstance(["hello", "world"], Seq[Word])  # True
+isinstance(["hello world"], Seq[Word])     # False (not words)
+
+# Covariance
+issubclass(Seq[Word], Seq[Text])  # True
+```
+
+**Common Use Cases**:
+- Lists of tokens
+- Sequences of sentences
+- Batches of samples
+- Multiple predictions
+
+<Info>
+`Seq[T]` is **covariant**: if `A ⊂ B`, then `Seq[A] ⊂ Seq[B]`.
+</Info>
+
+---
+
+### Supervised[T]
+
+<ParamField path="Supervised[T]" type="SemanticType">
+  Supervised (labeled) version of type T.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Supervised, VectorCategorical
+from autogoal.kb import MatrixContinuousDense, AlgorithmBase
+
+class Trainer(AlgorithmBase):
+    def run(self,
+            X: MatrixContinuousDense,
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Use y for training
+        model = self.train(X, y)
+        return model.predict(X)
+
+# Type relationships
+issubclass(Supervised[VectorCategorical], VectorCategorical)  # True
+issubclass(VectorCategorical, Supervised[VectorCategorical])  # False
+```
+
+**Common Use Cases**:
+- Training labels
+- Ground truth annotations
+- Supervised learning inputs
+
+<Warning>
+`Supervised[T]` is a **subtype** of `T`, but not vice versa. This ensures supervised algorithms only receive labeled data.
+</Warning>
+
+---
+
+## Other Types
+
+### FeatureSet
+
+<ParamField path="FeatureSet" type="SemanticType">
+  Dictionary mapping string keys to feature values.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import FeatureSet, VectorContinuous, AlgorithmBase
+
+class FeatureExtractor(AlgorithmBase):
+    def run(self, doc: Document) -> FeatureSet:
+        return {
+            'length': len(doc),
+            'word_count': len(doc.split()),
+            'has_uppercase': doc != doc.lower()
+        }
+```
+
+**Common Use Cases**:
+- Named feature dictionaries
+- Feature engineering outputs
+- Structured features
+
+---
+
+### Synset
+
+<ParamField path="Synset" type="SemanticType">
+  WordNet synset identifier.
+</ParamField>
+
+**Example Usage**:
+```python
+from autogoal.kb import Word, Synset, AlgorithmBase
+
+class WordNetLookup(AlgorithmBase):
+    def run(self, word: Word) -> Synset:
+        # Look up synset in WordNet
+        return synset_id
+```
+
+---
+
+## Type Reference Table
+
+### Text Types Quick Reference
+
+| Type | Matches | Example |
+|------|---------|----------|
+| `Text` | Any string | `"any text"` |
+| `Word` | String without spaces/periods | `"hello"` |
+| `Sentence` | String with ≤1 period | `"Hello world."` |
+| `Document` | Any text (semantic) | `"Hello. World."` |
+| `Stem` | Stemmed word (semantic) | `"run"` (from "running") |
+
+### Label Types Quick Reference
+
+| Type | Meaning | Example Values |
+|------|---------|----------------|
+| `Label` | Generic label | Any label |
+| `Postag` | Part-of-speech tag | `"NOUN"`, `"VERB"` |
+| `Chunktag` | Syntactic chunk | `"NP"`, `"VP"` |
+| `Sentiment` | Sentiment label | `"positive"`, `"negative"` |
+
+### Vector Types Quick Reference
+
+| Type | Dimensions | Data Type | Structure | Example |
+|------|------------|-----------|-----------|----------|
+| `Vector` | 1 | Any | Any | `np.array([1,2,3])` |
+| `VectorContinuous` | 1 | Float | Any | `np.array([1.0, 2.5])` |
+| `VectorDiscrete` | 1 | Integer | Dense | `np.array([1, 2, 3])` |
+| `VectorCategorical` | 1 | String | Dense | `np.array(['A', 'B'])` |
+
+### Matrix Types Quick Reference
+
+| Type | Dimensions | Data Type | Structure | Common Use |
+|------|------------|-----------|-----------|-------------|
+| `Matrix` | 2 | Any | Any | Generic 2D data |
+| `MatrixContinuous` | 2 | Float | Any | Features (dense or sparse) |
+| `MatrixContinuousDense` | 2 | Float | Dense | Tabular ML data |
+| `MatrixContinuousSparse` | 2 | Float | Sparse | TF-IDF, one-hot |
+| `MatrixDiscrete` | 2 | Integer | Dense | Count matrices |
+| `MatrixCategorical` | 2 | String | Dense | Categorical features |
+
+---
+
+## Usage Patterns
+
+### Classification Task
+
+```python
+from autogoal.kb import (
+    MatrixContinuousDense,
+    VectorCategorical,
+    Supervised,
+    AlgorithmBase
+)
+
+class MyClassifier(AlgorithmBase):
+    def run(self,
+            X: MatrixContinuousDense,
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Classification logic
+        return predictions
+```
+
+### Regression Task
+
+```python
+from autogoal.kb import (
+    MatrixContinuousDense,
+    VectorContinuous,
+    Supervised,
+    AlgorithmBase
+)
+
+class MyRegressor(AlgorithmBase):
+    def run(self,
+            X: MatrixContinuousDense,
+            y: Supervised[VectorContinuous]) -> VectorContinuous:
+        # Regression logic
+        return predictions
+```
+
+### NLP Pipeline
+
+```python
+from autogoal.kb import (
+    Document,
+    Seq,
+    Word,
+    VectorContinuous,
+    AlgorithmBase
+)
+
+class Tokenizer(AlgorithmBase):
+    def run(self, doc: Document) -> Seq[Word]:
+        return doc.split()
+
+class WordEmbedder(AlgorithmBase):
+    def run(self, word: Word) -> VectorContinuous:
+        return self.embedding_matrix[word]
+
+class Averager(AlgorithmBase):
+    def run(self, vectors: Seq[VectorContinuous]) -> VectorContinuous:
+        return np.mean(vectors, axis=0)
+```
+
+### Image Classification
+
+```python
+from autogoal.kb import (
+    Tensor4,
+    VectorCategorical,
+    Supervised,
+    AlgorithmBase
+)
+
+class ImageClassifier(AlgorithmBase):
+    def run(self,
+            images: Tensor4,
+            labels: Supervised[VectorCategorical]) -> VectorCategorical:
+        # CNN training and prediction
+        return predictions
+```
+
+---
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Semantic Types API" icon="tags" href="/api/kb/semantic-types">
+    Deep dive into the semantic type system
+  </Card>
+  <Card title="Algorithm Classes" icon="code" href="/api/kb/algorithms">
+    Learn how to use types in algorithm definitions
+  </Card>
+  <Card title="KB Overview" icon="book" href="/api/kb/overview">
+    Understand the Knowledge Base module
+  </Card>
+  <Card title="Custom Algorithms" icon="wrench" href="/guides/custom-algorithms">
+    Create algorithms using these types
+  </Card>
+</CardGroup>

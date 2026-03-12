@@ -1,0 +1,532 @@
+---
+title: "optimize()"
+description: "API reference for the optimize() function - black-box hyperparameter optimization for any Python function"
+---
+
+## Overview
+
+The `optimize()` function provides a general-purpose black-box optimization framework that can be applied to any Python function. It's particularly useful for hyperparameter tuning when you want to find the best parameters for your custom code without building a full AutoML pipeline.
+
+## Function Signature
+
+```python
+from autogoal.utils import optimize
+
+best_params, best_score = optimize(
+    fn,
+    search_strategy=PESearch,
+    generations=100,
+    pop_size=10,
+    allow_duplicates=False,
+    logger=None,
+    **kwargs
+)
+```
+
+## Parameters
+
+<ParamField path="fn" type="callable" required>
+  The function to optimize. Must have type annotations on its parameters that define the search space. The function should return a numeric value to maximize (higher is better).
+</ParamField>
+
+<ParamField path="search_strategy" type="class" default="PESearch">
+  The search algorithm class to use. Default is `PESearch` (Progressive Evolution Search). Other options include `RandomSearch`, `NSGA2`, etc.
+</ParamField>
+
+<ParamField path="generations" type="int" default="100">
+  Maximum number of generations (iterations) to run the optimization.
+</ParamField>
+
+<ParamField path="pop_size" type="int" default="10">
+  Population size for evolutionary algorithms.
+</ParamField>
+
+<ParamField path="allow_duplicates" type="bool" default="False">
+  Whether to allow duplicate solutions in the population.
+</ParamField>
+
+<ParamField path="logger" type="Logger | List[Logger] | None" default="None">
+  Logger instance(s) to track the optimization progress.
+</ParamField>
+
+<ParamField path="**kwargs" type="dict">
+  Additional keyword arguments passed to the search strategy constructor.
+</ParamField>
+
+## Returns
+
+<ResponseField name="best_params" type="dict">
+  Dictionary containing the best parameter values found during optimization.
+</ResponseField>
+
+<ResponseField name="best_score" type="float">
+  The best score (return value of `fn`) achieved with `best_params`.
+</ResponseField>
+
+## How It Works
+
+The `optimize()` function works by:
+
+1. **Inspecting the function signature** to extract parameter type annotations
+2. **Generating a grammar** that defines the search space based on these annotations
+3. **Running the search algorithm** to explore different parameter combinations
+4. **Evaluating each combination** by calling your function with those parameters
+5. **Returning the best parameters** found during the search
+
+<Note>
+  All parameters of the function you want to optimize **must have type annotations**. These annotations define the search space.
+</Note>
+
+## Basic Examples
+
+<CodeGroup>
+```python Simple Numeric Optimization
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue
+
+# Define function to optimize
+def quadratic(
+    x: ContinuousValue(-10, 10),
+    y: ContinuousValue(-10, 10)
+):
+    """Find x and y that maximize this function."""
+    return -(x**2 + y**2)  # Maximum at x=0, y=0
+
+# Optimize
+best_params, best_score = optimize(
+    quadratic,
+    generations=50
+)
+
+print(f"Best parameters: {best_params}")
+print(f"Best score: {best_score}")
+# Output: Best parameters: {'x': ~0.0, 'y': ~0.0}
+#         Best score: ~0.0
+```
+
+```python Hyperparameter Tuning
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue, DiscreteValue, CategoricalValue
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+import numpy as np
+
+# Load data
+X, y = load_iris(return_X_y=True)
+
+# Define function with hyperparameters
+def train_random_forest(
+    n_estimators: DiscreteValue(10, 200),
+    max_depth: DiscreteValue(2, 20),
+    min_samples_split: DiscreteValue(2, 10),
+    criterion: CategoricalValue('gini', 'entropy')
+):
+    """Train random forest and return accuracy."""
+    model = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        criterion=criterion,
+        random_state=42
+    )
+    
+    # Return mean cross-validation score
+    scores = cross_val_score(model, X, y, cv=5)
+    return np.mean(scores)
+
+# Optimize hyperparameters
+best_params, best_score = optimize(
+    train_random_forest,
+    generations=30,
+    pop_size=15
+)
+
+print(f"Best hyperparameters: {best_params}")
+print(f"Best cross-validation score: {best_score:.4f}")
+```
+
+```python Custom Search Strategy
+from autogoal.utils import optimize
+from autogoal.search import RandomSearch
+from autogoal.grammar import ContinuousValue, DiscreteValue
+
+def neural_network_config(
+    learning_rate: ContinuousValue(1e-5, 1e-1, 'log'),
+    hidden_units: DiscreteValue(32, 512),
+    dropout: ContinuousValue(0.1, 0.5),
+    batch_size: CategoricalValue(16, 32, 64, 128)
+):
+    """Simulate training a neural network."""
+    # Your training code here
+    accuracy = train_model(
+        lr=learning_rate,
+        units=hidden_units,
+        dropout=dropout,
+        batch=batch_size
+    )
+    return accuracy
+
+# Use random search instead of evolutionary
+best_params, best_score = optimize(
+    neural_network_config,
+    search_strategy=RandomSearch,
+    generations=50
+)
+
+print(f"Best config: {best_params}")
+print(f"Best accuracy: {best_score:.4f}")
+```
+</CodeGroup>
+
+## Type Annotations
+
+The `optimize()` function supports various type annotations to define the search space:
+
+### ContinuousValue
+
+Defines a continuous numeric range:
+
+```python
+from autogoal.grammar import ContinuousValue
+
+def my_function(
+    param: ContinuousValue(0.0, 1.0)  # Linear scale
+):
+    pass
+
+def log_scale_function(
+    learning_rate: ContinuousValue(1e-5, 1e-1, 'log')  # Logarithmic scale
+):
+    pass
+```
+
+### DiscreteValue
+
+Defines a discrete integer range:
+
+```python
+from autogoal.grammar import DiscreteValue
+
+def my_function(
+    n_estimators: DiscreteValue(10, 100)  # Integers from 10 to 100
+):
+    pass
+```
+
+### CategoricalValue
+
+Defines a choice from a set of options:
+
+```python
+from autogoal.grammar import CategoricalValue
+
+def my_function(
+    optimizer: CategoricalValue('adam', 'sgd', 'rmsprop'),
+    activation: CategoricalValue('relu', 'tanh', 'sigmoid')
+):
+    pass
+```
+
+### BooleanValue
+
+Defines a boolean parameter:
+
+```python
+from autogoal.grammar import BooleanValue
+
+def my_function(
+    use_batch_norm: BooleanValue()
+):
+    pass
+```
+
+## Advanced Examples
+
+<CodeGroup>
+```python Multi-Objective Optimization
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue, DiscreteValue
+
+def model_performance(
+    complexity: DiscreteValue(1, 10),
+    regularization: ContinuousValue(0.0, 1.0)
+):
+    """Return tuple of (accuracy, -model_size) for multi-objective."""
+    # Train model with given parameters
+    accuracy = train_and_evaluate(complexity, regularization)
+    model_size = estimate_size(complexity)
+    
+    # Return multiple objectives (maximize both)
+    return (accuracy, -model_size)
+
+best_params, best_scores = optimize(
+    model_performance,
+    generations=100,
+    pop_size=20
+)
+
+print(f"Best parameters: {best_params}")
+print(f"Pareto front scores: {best_scores}")
+```
+
+```python With Logger
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue
+from autogoal.search import ConsoleLogger, ProgressLogger
+
+def expensive_function(
+    x: ContinuousValue(-5, 5),
+    y: ContinuousValue(-5, 5)
+):
+    import time
+    time.sleep(0.1)  # Simulate expensive computation
+    return -(x**2 + y**2)
+
+# Create loggers
+console_logger = ConsoleLogger()
+progress_logger = ProgressLogger()
+
+# Optimize with logging
+best_params, best_score = optimize(
+    expensive_function,
+    generations=50,
+    logger=[console_logger, progress_logger]
+)
+
+print(f"\nOptimization complete!")
+print(f"Best parameters: {best_params}")
+print(f"Best score: {best_score:.4f}")
+```
+
+```python Pipeline Component Selection
+from autogoal.utils import optimize
+from autogoal.grammar import CategoricalValue, DiscreteValue, ContinuousValue
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.decomposition import PCA
+from sklearn.svm import SVC
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_score
+import numpy as np
+
+# Load your data
+X, y = load_your_data()
+
+def optimize_pipeline(
+    scaler_type: CategoricalValue('standard', 'minmax', 'robust'),
+    use_pca: BooleanValue(),
+    n_components: DiscreteValue(2, 20),
+    C: ContinuousValue(0.01, 100, 'log'),
+    gamma: CategoricalValue('scale', 'auto')
+):
+    """Optimize a scikit-learn pipeline."""
+    
+    # Select scaler
+    scalers = {
+        'standard': StandardScaler(),
+        'minmax': MinMaxScaler(),
+        'robust': RobustScaler()
+    }
+    scaler = scalers[scaler_type]
+    
+    # Build pipeline steps
+    steps = [('scaler', scaler)]
+    
+    if use_pca:
+        steps.append(('pca', PCA(n_components=n_components)))
+    
+    steps.append(('classifier', SVC(C=C, gamma=gamma)))
+    
+    # Create and evaluate pipeline
+    pipeline = Pipeline(steps)
+    scores = cross_val_score(pipeline, X, y, cv=5)
+    
+    return np.mean(scores)
+
+# Optimize
+best_params, best_score = optimize(
+    optimize_pipeline,
+    generations=50,
+    pop_size=20
+)
+
+print(f"Best pipeline configuration: {best_params}")
+print(f"Best CV score: {best_score:.4f}")
+```
+</CodeGroup>
+
+## Comparison with AutoML
+
+| Feature | `optimize()` | `AutoML` |
+|---------|-------------|----------|
+| **Use Case** | Optimize any Python function | Find best ML pipeline |
+| **Flexibility** | Maximum - any code | ML-specific |
+| **Setup** | Add type annotations | Specify input/output types |
+| **Search Space** | Custom (via annotations) | Algorithm combinations |
+| **Best For** | Hyperparameter tuning, custom optimization | End-to-end ML automation |
+
+<Tip>
+  Use `optimize()` when you have a specific function to tune. Use `AutoML` when you want to automatically discover the best ML pipeline.
+</Tip>
+
+## Implementation Details
+
+Under the hood, `optimize()` performs the following steps:
+
+1. **Extracts parameter annotations** using Python's `inspect` module
+2. **Generates a grammar function** (`_make_params_func`) that returns parameter dictionaries
+3. **Creates a context-free grammar** using `generate_cfg()`
+4. **Wraps your function** to accept parameter dictionaries
+5. **Runs the search algorithm** to explore the parameter space
+6. **Returns the best parameters and score** found
+
+The implementation is located in `/home/daytona/workspace/source/autogoal/autogoal/utils/_helpers.py`.
+
+## Common Patterns
+
+### 1. Nested Hyperparameters
+
+```python
+from autogoal.utils import optimize
+from autogoal.grammar import CategoricalValue, DiscreteValue, ContinuousValue
+
+def train_model(
+    model_type: CategoricalValue('rf', 'svm', 'nn'),
+    # Random Forest params
+    rf_n_estimators: DiscreteValue(10, 200),
+    rf_max_depth: DiscreteValue(2, 20),
+    # SVM params
+    svm_C: ContinuousValue(0.01, 100, 'log'),
+    svm_kernel: CategoricalValue('rbf', 'linear'),
+    # Neural Network params
+    nn_hidden_size: DiscreteValue(32, 512),
+    nn_learning_rate: ContinuousValue(1e-5, 1e-1, 'log')
+):
+    """Only use parameters relevant to selected model_type."""
+    if model_type == 'rf':
+        return train_random_forest(rf_n_estimators, rf_max_depth)
+    elif model_type == 'svm':
+        return train_svm(svm_C, svm_kernel)
+    else:  # nn
+        return train_neural_net(nn_hidden_size, nn_learning_rate)
+
+best_params, best_score = optimize(train_model, generations=50)
+```
+
+### 2. Early Stopping
+
+```python
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue
+
+# Track best score globally
+best_so_far = float('-inf')
+patience_counter = 0
+MAX_PATIENCE = 10
+
+def objective(
+    x: ContinuousValue(-10, 10),
+    y: ContinuousValue(-10, 10)
+):
+    global best_so_far, patience_counter
+    
+    score = compute_score(x, y)
+    
+    if score > best_so_far:
+        best_so_far = score
+        patience_counter = 0
+    else:
+        patience_counter += 1
+        
+    if patience_counter >= MAX_PATIENCE:
+        raise StopIteration("Early stopping triggered")
+    
+    return score
+
+try:
+    best_params, best_score = optimize(objective, generations=1000)
+except StopIteration:
+    print("Optimization stopped early")
+```
+
+### 3. Parameter Constraints
+
+```python
+from autogoal.utils import optimize
+from autogoal.grammar import DiscreteValue
+
+def constrained_optimization(
+    layer1_size: DiscreteValue(32, 512),
+    layer2_size: DiscreteValue(32, 512),
+    layer3_size: DiscreteValue(32, 512)
+):
+    """Ensure layers decrease in size."""
+    
+    # Apply constraint: layer1 >= layer2 >= layer3
+    if not (layer1_size >= layer2_size >= layer3_size):
+        return float('-inf')  # Invalid configuration
+    
+    # Train and evaluate model
+    return evaluate_network([layer1_size, layer2_size, layer3_size])
+
+best_params, best_score = optimize(
+    constrained_optimization,
+    generations=50
+)
+```
+
+## Error Handling
+
+<Warning>
+  If your function raises an exception during optimization, the behavior depends on the search algorithm's `errors` parameter. By default, errors are logged and the evaluation returns a poor score.
+</Warning>
+
+```python
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue
+
+def risky_function(
+    x: ContinuousValue(-10, 10)
+):
+    if x < 0:
+        raise ValueError("x must be positive!")
+    return x ** 2
+
+# Optimize with error handling
+best_params, best_score = optimize(
+    risky_function,
+    generations=50,
+    errors='ignore'  # Passed to search strategy
+)
+```
+
+## Performance Tips
+
+<Tip>
+  **Reduce `generations` for faster experimentation** - Start with 10-20 generations to test your function, then increase for final optimization.
+</Tip>
+
+<Tip>
+  **Use logarithmic scaling** for learning rates and regularization parameters: `ContinuousValue(1e-5, 1e-1, 'log')`
+</Tip>
+
+<Tip>
+  **Vectorize evaluations** if possible - Some search strategies support batch evaluation for parallel speedup.
+</Tip>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="AutoML Class" icon="robot" href="/api/automl">
+    Automated machine learning pipeline search
+  </Card>
+  <Card title="Search Algorithms" icon="magnifying-glass" href="/concepts/optimization">
+    Learn about different optimization strategies
+  </Card>
+  <Card title="Grammar System" icon="language" href="/concepts/search-spaces">
+    Understanding the grammar-based search space
+  </Card>
+  <Card title="Type Annotations" icon="tags" href="/api/grammar/cfg">
+    Complete guide to parameter type annotations
+  </Card>
+</CardGroup>

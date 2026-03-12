@@ -1,0 +1,508 @@
+---
+title: Regression with AutoML
+description: Use AutoML to automatically build regression models for continuous value prediction
+---
+
+## Overview
+
+Regression is a fundamental machine learning task where the goal is to predict continuous numerical values. AutoGOAL's AutoML can automatically discover and optimize regression pipelines for various types of input data.
+
+## Regression Problem Types
+
+AutoML supports various regression scenarios:
+
+<CardGroup cols={2}>
+  <Card title="Single-Output Regression" icon="chart-line">
+    Predicting a single continuous value (e.g., house prices, temperature)
+  </Card>
+  
+  <Card title="Multi-Output Regression" icon="chart-area">
+    Predicting multiple continuous values simultaneously
+  </Card>
+  
+  <Card title="Time Series Forecasting" icon="clock">
+    Predicting future values based on historical data
+  </Card>
+  
+  <Card title="Feature-Rich Regression" icon="table">
+    Working with high-dimensional feature spaces
+  </Card>
+</CardGroup>
+
+## Basic Regression Example
+
+Here's a complete example using the Abalone dataset to predict age:
+
+```python
+from autogoal.datasets import abalone
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorContinuous
+from autogoal.ml import AutoML
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Load the dataset
+X, y = abalone.load()
+
+# Convert target to continuous values if needed
+y = np.asarray(y, dtype=float)
+
+# Split into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# Create AutoML instance for regression
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    search_iterations=100,
+)
+
+# Train the model
+automl.fit(X_train, y_train)
+
+# Make predictions
+y_pred = automl.predict(X_test)
+
+# Evaluate performance
+scores = automl.score(X_test, y_test)
+print(f"Test scores: {scores}")
+print(f"Predictions shape: {y_pred.shape}")
+```
+
+## Semantic Types for Regression
+
+For regression tasks, the key difference from classification is the output type:
+
+<CodeGroup>
+```python Dense Numeric Data
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorContinuous
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,  # Continuous output
+)
+```
+
+```python Sparse Numeric Data
+from autogoal.kb import MatrixContinuousSparse, Supervised, VectorContinuous
+
+automl = AutoML(
+    input=(MatrixContinuousSparse, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+)
+```
+
+```python Text to Numeric
+from autogoal.kb import Seq, Sentence, Supervised, VectorContinuous
+
+# Predicting numeric values from text (e.g., sentiment scores)
+automl = AutoML(
+    input=(Seq[Sentence], Supervised[VectorContinuous]),
+    output=VectorContinuous,
+)
+```
+</CodeGroup>
+
+<Note>
+  Use `VectorContinuous` for regression outputs instead of `VectorCategorical` used in classification.
+</Note>
+
+## Regression Metrics
+
+Choose appropriate metrics for your regression problem:
+
+<CodeGroup>
+```python Mean Squared Error
+from sklearn.metrics import mean_squared_error
+
+# Lower is better - penalizes large errors heavily
+automl = AutoML(
+    objectives=lambda y_true, y_pred: -mean_squared_error(y_true, y_pred),
+    # ... other parameters
+)
+```
+
+```python Mean Absolute Error
+from sklearn.metrics import mean_absolute_error
+
+# Lower is better - robust to outliers
+automl = AutoML(
+    objectives=lambda y_true, y_pred: -mean_absolute_error(y_true, y_pred),
+    # ... other parameters
+)
+```
+
+```python R² Score
+from sklearn.metrics import r2_score
+
+# Higher is better - proportion of variance explained
+automl = AutoML(
+    objectives=r2_score,
+    # ... other parameters
+)
+```
+
+```python Multiple Metrics
+from sklearn.metrics import r2_score, mean_squared_error
+
+# Optimize for multiple objectives
+def mse_neg(y_true, y_pred):
+    return -mean_squared_error(y_true, y_pred)
+
+automl = AutoML(
+    objectives=(r2_score, mse_neg),
+    # ... other parameters
+)
+```
+</CodeGroup>
+
+<Warning>
+  For metrics where lower is better (MSE, MAE), negate them so AutoML maximizes performance. Use `lambda y_true, y_pred: -mean_squared_error(y_true, y_pred)`.
+</Warning>
+
+## Complete Regression Example
+
+Here's a comprehensive example with proper configuration:
+
+```python
+from autogoal.datasets import abalone
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorContinuous
+from autogoal.ml import AutoML
+from autogoal.search import PESearch, RichLogger
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+import numpy as np
+
+# Load and prepare data
+X, y = abalone.load()
+y = np.asarray(y, dtype=float)
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# Define custom objective that combines multiple metrics
+def regression_objective(y_true, y_pred):
+    """Custom objective: maximize R² (higher is better)"""
+    return r2_score(y_true, y_pred)
+
+# Configure AutoML for regression
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    
+    # Search configuration
+    search_algorithm=PESearch,
+    search_iterations=200,
+    
+    # Objective and evaluation
+    objectives=regression_objective,
+    validation_split=0.3,
+    cross_validation_steps=5,
+    cross_validation="median",
+    
+    # Resource limits
+    pop_size=50,
+    evaluation_timeout=300,
+    memory_limit=8 * 1024**3,
+    
+    # Reproducibility
+    random_state=42,
+    errors="warn",
+)
+
+# Train with logging
+print("Training regression model...")
+automl.fit(X_train, y_train, logger=RichLogger())
+
+# Evaluate on test set
+y_pred = automl.predict(X_test)
+
+# Calculate multiple metrics
+r2 = r2_score(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+
+print(f"\nTest Set Performance:")
+print(f"R² Score: {r2:.4f}")
+print(f"MSE: {mse:.4f}")
+print(f"RMSE: {rmse:.4f}")
+print(f"MAE: {mae:.4f}")
+
+print(f"\nBest pipeline:\n{automl.best_pipelines_[0]}")
+```
+
+## Handling Different Data Scales
+
+Regression is sensitive to feature scales. AutoGOAL's pipelines can automatically handle this:
+
+```python
+# AutoML will automatically discover and use scaling algorithms
+# like StandardScaler, MinMaxScaler, RobustScaler, etc.
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    
+    # The search will find appropriate preprocessing
+    search_iterations=200,
+)
+
+automl.fit(X_train, y_train)
+
+# The best pipeline may include scaling steps
+print(automl.best_pipelines_[0])
+# Example output might show: StandardScaler -> Ridge Regression
+```
+
+## Multi-Output Regression
+
+For predicting multiple continuous values simultaneously:
+
+```python
+import numpy as np
+from autogoal.kb import MatrixContinuousDense, Supervised, MatrixContinuous
+from autogoal.ml import AutoML
+
+# Create sample data with multiple outputs
+X = np.random.randn(1000, 10)
+y = np.random.randn(1000, 3)  # 3 output variables
+
+# Use MatrixContinuous for multi-output
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[MatrixContinuous]),
+    output=MatrixContinuous,  # Multiple continuous outputs
+    search_iterations=100,
+)
+
+automl.fit(X, y)
+
+# Predictions will have the same shape as y
+X_new = np.random.randn(10, 10)
+y_pred = automl.predict(X_new)
+print(f"Predictions shape: {y_pred.shape}")  # (10, 3)
+```
+
+## Advanced Configuration for Regression
+
+Optimize regression models with fine-tuned parameters:
+
+<Steps>
+  <Step title="Choose Appropriate Metrics">
+    Select metrics that match your problem requirements.
+    
+    ```python
+    # For outlier-robust regression
+    from sklearn.metrics import mean_absolute_error
+    
+    automl = AutoML(
+        objectives=lambda y_true, y_pred: -mean_absolute_error(y_true, y_pred),
+        # ...
+    )
+    ```
+  </Step>
+  
+  <Step title="Increase Cross-Validation">
+    More folds provide better variance estimates.
+    
+    ```python
+    automl = AutoML(
+        cross_validation_steps=10,
+        cross_validation="median",  # Robust to outliers
+        validation_split=0.2,
+        # ...
+    )
+    ```
+  </Step>
+  
+  <Step title="Set Resource Constraints">
+    Prevent expensive pipelines from running too long.
+    
+    ```python
+    automl = AutoML(
+        evaluation_timeout=600,     # 10 min per pipeline
+        memory_limit=10 * 1024**3,  # 10 GB
+        # ...
+    )
+    ```
+  </Step>
+  
+  <Step title="Allow Sufficient Exploration">
+    Give the algorithm time to find good solutions.
+    
+    ```python
+    automl = AutoML(
+        search_iterations=500,  # More iterations
+        pop_size=100,           # Larger population
+        # ...
+    )
+    ```
+  </Step>
+</Steps>
+
+## Real-World Example: House Price Prediction
+
+Here's a realistic example for predicting house prices:
+
+```python
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorContinuous
+from autogoal.search import RichLogger
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error
+import numpy as np
+
+# Assume we have house data: features like size, bedrooms, location, etc.
+# X shape: (n_houses, n_features)
+# y shape: (n_houses,) - prices
+
+# For this example, we'll use simulated data
+np.random.seed(42)
+X = np.random.randn(1000, 15)  # 15 features
+y = X[:, 0] * 50000 + X[:, 1] * 30000 + np.random.randn(1000) * 5000 + 200000
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Configure AutoML for price prediction
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    
+    # Use R² as primary metric
+    objectives=r2_score,
+    
+    # Robust evaluation
+    validation_split=0.2,
+    cross_validation_steps=5,
+    cross_validation="median",
+    
+    # Search configuration
+    search_iterations=300,
+    pop_size=50,
+    
+    # Resource limits
+    evaluation_timeout=300,
+    memory_limit=8 * 1024**3,
+    
+    # Reproducibility
+    random_state=42,
+    errors="warn",
+)
+
+print("Training house price prediction model...")
+automl.fit(X_train, y_train, logger=RichLogger())
+
+# Evaluate
+y_pred = automl.predict(X_test)
+
+r2 = r2_score(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+
+print(f"\nModel Performance:")
+print(f"R² Score: {r2:.4f}")
+print(f"Mean Absolute Error: ${mae:,.2f}")
+print(f"\nBest Pipeline:\n{automl.best_pipelines_[0]}")
+
+# Make predictions on new houses
+X_new = np.random.randn(5, 15)
+predicted_prices = automl.predict(X_new)
+print(f"\nPredicted prices for 5 new houses:")
+for i, price in enumerate(predicted_prices):
+    print(f"  House {i+1}: ${price:,.2f}")
+```
+
+## Feature Engineering
+
+AutoML can automatically discover feature transformations:
+
+```python
+from autogoal.ml import AutoML
+
+# AutoML will explore various preprocessing options:
+# - Polynomial features
+# - Feature selection
+# - Dimensionality reduction (PCA, etc.)
+# - Scaling and normalization
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    search_iterations=500,  # More iterations to find good features
+)
+
+automl.fit(X_train, y_train)
+
+# Examine the pipeline to see what transformations were found
+print("Pipeline steps:")
+for i, step in enumerate(automl.best_pipelines_[0].algorithms):
+    print(f"  Step {i+1}: {step}")
+```
+
+## Saving and Loading Regression Models
+
+```python
+from pathlib import Path
+
+# Save the trained regression model
+save_path = Path("./house_price_model")
+automl.folder_save(save_path)
+
+print(f"Model saved to {save_path}")
+
+# Later, load and use the model
+from autogoal.ml import AutoML
+
+loaded_model = AutoML.folder_load(save_path)
+
+# Make predictions with loaded model
+new_predictions = loaded_model.predict(X_new)
+print(f"New predictions: {new_predictions}")
+```
+
+## Tips for Better Regression Results
+
+<Note>
+  **Normalize your target variable**: If your target values span multiple orders of magnitude, consider log-transforming them before training.
+</Note>
+
+<Note>
+  **Use appropriate metrics**: R² is good for general performance, MAE for interpretability, and MSE if you want to penalize large errors more.
+</Note>
+
+<Note>
+  **Check for outliers**: Extreme outliers can significantly impact regression. Consider using robust metrics like MAE or removing outliers.
+</Note>
+
+<Note>
+  **Increase iterations for complex data**: High-dimensional or noisy data may require 500+ iterations to find good pipelines.
+</Note>
+
+<Warning>
+  Always validate on a held-out test set. Cross-validation scores during training may be optimistic.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Classification Tasks" icon="chart-simple" href="/automl/classification">
+    Learn about classification with AutoML
+  </Card>
+  
+  <Card title="Custom Pipelines" icon="diagram-project" href="/automl/custom-pipelines">
+    Build and customize pipelines manually
+  </Card>
+  
+  <Card title="Metrics and Objectives" icon="bullseye" href="/api/metrics">
+    Deep dive into evaluation metrics
+  </Card>
+  
+  <Card title="Search Algorithms" icon="magnifying-glass" href="/concepts/optimization">
+    Understand pipeline search strategies
+  </Card>
+</CardGroup>

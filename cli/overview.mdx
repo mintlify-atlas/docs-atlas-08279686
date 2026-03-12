@@ -1,0 +1,248 @@
+---
+title: CLI Overview
+description: Complete guide to AutoGOAL's command-line interface for training models, managing datasets, and exploring contrib libraries
+---
+
+## Introduction
+
+AutoGOAL provides a powerful command-line interface (CLI) that allows you to perform machine learning tasks, manage datasets, and explore contrib libraries without writing a single line of code. The CLI is built with [Typer](https://typer.tiangolo.com/) and provides a rich, interactive experience with helpful messages and progress bars.
+
+## Installation
+
+The CLI is automatically available after installing AutoGOAL:
+
+```bash
+pip install autogoal
+```
+
+For full functionality with all contrib libraries:
+
+```bash
+pip install autogoal[contrib]
+```
+
+## Main Commands
+
+The AutoGOAL CLI is organized into several command groups:
+
+<CardGroup cols={2}>
+  <Card title="AutoML Commands" icon="robot" href="/cli/training">
+    Train and predict with automated machine learning models
+  </Card>
+  <Card title="Data Commands" icon="database" href="/cli/datasets">
+    Download, inspect, and manage training datasets
+  </Card>
+  <Card title="Contrib Commands" icon="puzzle-piece" href="/cli/contrib">
+    Explore and manage contrib algorithm libraries
+  </Card>
+  <Card title="Prediction" icon="crystal-ball" href="/cli/prediction">
+    Make predictions with trained models
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+To see all available commands, run:
+
+```bash
+autogoal --help
+```
+
+<Note>
+The CLI uses emoji icons (🤩, 🔍, 🤖, etc.) to make the interface more friendly and easier to navigate.
+</Note>
+
+### Command-Specific Help
+
+Each command and subcommand has detailed help information:
+
+```bash
+# Get help for ml commands
+autogoal ml --help
+
+# Get help for a specific command
+autogoal ml fit --help
+
+# Get help for data commands
+autogoal data --help
+
+# Get help for contrib commands
+autogoal contrib --help
+```
+
+## Quick Start Examples
+
+### Train an AutoML Model
+
+Train a model on a CSV dataset:
+
+```bash
+autogoal ml fit train.csv --target class_label
+```
+
+### Make Predictions
+
+Use a trained model to make predictions:
+
+```bash
+autogoal ml predict test.csv --model ./storage --output predictions.csv
+```
+
+### Download a Dataset
+
+Download one of AutoGOAL's built-in datasets:
+
+```bash
+autogoal data download movie_reviews
+```
+
+### List Available Algorithms
+
+Explore available contrib algorithms:
+
+```bash
+autogoal contrib list --verbose
+```
+
+## Command Structure
+
+The CLI follows a consistent structure:
+
+```bash
+autogoal [GROUP] [COMMAND] [ARGUMENTS] [OPTIONS]
+```
+
+**Example breakdown:**
+
+```bash
+autogoal ml fit train.csv --target price --iterations 100
+│         │  │   │         │              │
+│         │  │   │         │              └─ Option with value
+│         │  │   │         └──────────────── Option flag
+│         │  │   └────────────────────────── Required argument
+│         │  └────────────────────────────── Command
+│         └───────────────────────────────── Command group
+└─────────────────────────────────────────── Main program
+```
+
+## Common Options
+
+Many commands share common options:
+
+<ParamField path="--help" type="flag">
+  Display help information for the command
+</ParamField>
+
+<ParamField path="--format" type="string" default="auto">
+  Specify input file format: `csv` or `json`. Auto-detected by default based on file extension
+</ParamField>
+
+<ParamField path="--input" type="path">
+  Path to input data file
+</ParamField>
+
+<ParamField path="--output" type="path">
+  Path to output file or directory
+</ParamField>
+
+## File Format Support
+
+AutoGOAL CLI supports multiple file formats:
+
+### CSV Files
+
+```bash
+autogoal ml fit data.csv --target label
+```
+
+CSV files are auto-detected and parsed with pandas. The target column is assumed to be the last column if not specified.
+
+### JSON Files
+
+```bash
+autogoal ml fit data.json --target label --format json
+```
+
+JSON files should contain tabular data in a format compatible with pandas `read_json`.
+
+## Output and Logging
+
+The CLI provides rich output with:
+
+- **Progress bars** for long-running operations
+- **Color-coded messages** for different types of information
+- **Emoji indicators** for visual clarity
+- **Tables** for structured data display
+- **Formatted error messages** with helpful debugging information
+
+### Example Output
+
+When training a model:
+
+```
+🏃 Training on 1000 items.
+[Progress bar with iteration details]
+💾 Saving model to /path/to/storage.
+```
+
+## Error Handling
+
+When an error occurs, the CLI provides:
+
+1. A clear error message
+2. An option to view the full traceback for debugging
+
+```
+⚠️  The command failed with message:
+"Input format not recognized. Must be either CSV or JSON."
+
+❓ Do you want to inspect the traceback? [y/N]
+```
+
+<Tip>
+Press `y` to see the full Python traceback when debugging issues.
+</Tip>
+
+## Working with Paths
+
+The CLI uses Python's `Path` objects internally:
+
+- **Relative paths** are resolved from the current working directory
+- **Absolute paths** can be used for precise file locations
+- **Home directory** expansion (`~`) is supported
+
+```bash
+# Relative path
+autogoal ml fit ./data/train.csv
+
+# Absolute path
+autogoal ml fit /home/user/datasets/train.csv
+
+# Home directory
+autogoal ml fit ~/datasets/train.csv
+```
+
+## Next Steps
+
+Explore specific CLI functionality:
+
+<CardGroup cols={2}>
+  <Card title="Training Models" icon="graduation-cap" href="/cli/training">
+    Learn how to train AutoML models with `autogoal ml fit`
+  </Card>
+  <Card title="Making Predictions" icon="wand-magic-sparkles" href="/cli/prediction">
+    Use trained models for prediction with `autogoal ml predict`
+  </Card>
+  <Card title="Managing Datasets" icon="folder-open" href="/cli/datasets">
+    Download and manage datasets with `autogoal data` commands
+  </Card>
+  <Card title="Contrib Libraries" icon="books" href="/cli/contrib">
+    Explore available algorithms with `autogoal contrib` commands
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [Python API Documentation](/api-reference/introduction)
+- [Quickstart Guide](/quickstart)
+- [Development Guide](/development)

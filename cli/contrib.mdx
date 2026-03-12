@@ -1,0 +1,637 @@
+---
+title: Contrib Libraries
+description: Explore and manage contrib algorithm libraries with autogoal contrib commands
+---
+
+## Overview
+
+AutoGOAL's contrib system provides access to hundreds of machine learning algorithms from popular libraries like scikit-learn, NLTK, Keras, and more. The `autogoal contrib` commands help you explore available algorithms, check installation status, and download required resources.
+
+## What are Contrib Libraries?
+
+Contrib libraries are optional AutoGOAL extensions that provide:
+
+- **Algorithm implementations** from popular ML frameworks
+- **Pre-configured wrappers** with AutoGOAL integration
+- **Type annotations** for automatic pipeline construction
+- **Dependency management** for external requirements
+
+### Available Contrib Libraries
+
+- `sklearn` - Scikit-learn algorithms
+- `nltk` - Natural Language Toolkit
+- `keras` - Deep learning with Keras/TensorFlow
+- `torch` - PyTorch neural networks
+- `transformers` - Hugging Face transformers
+- `gensim` - Topic modeling and word embeddings
+- `spacy` - Advanced NLP pipelines
+- And more...
+
+<Note>
+Contrib libraries require `autogoal-contrib` to be installed:
+```bash
+pip install autogoal[contrib]
+```
+</Note>
+
+## Available Commands
+
+<CardGroup cols={3}>
+  <Card title="List Algorithms" icon="list-check">
+    Browse available algorithms
+  </Card>
+  <Card title="Check Status" icon="circle-check">
+    View contrib library status
+  </Card>
+  <Card title="Download Resources" icon="download">
+    Get required data files
+  </Card>
+</CardGroup>
+
+## Listing Algorithms
+
+Explore all available contrib algorithms with filtering options.
+
+### Command
+
+```bash
+autogoal contrib list [OPTIONS]
+```
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Show detailed information including input/output types for each algorithm
+</ParamField>
+
+<ParamField path="--include" type="string" default="None">
+  Filter algorithms by name pattern (e.g., `Classifier`, `Tree`, etc.)
+</ParamField>
+
+<ParamField path="--exclude" type="string" default="None">
+  Exclude algorithms matching a pattern
+</ParamField>
+
+<ParamField path="--input" type="string" default="None">
+  Filter by input type (e.g., `MatrixContinuousDense`, `List[str]`)
+</ParamField>
+
+<ParamField path="--output" type="string" default="None">
+  Filter by output type (e.g., `VectorCategorical`, `Tensor`)
+</ParamField>
+
+### Basic Usage
+
+List all algorithms:
+
+```bash
+autogoal contrib list
+```
+
+**Output:**
+```
+⚙️  Found a total of 347 matching algorithms.
+🛠️  sklearn: 156 algorithms.
+🛠️  nltk: 42 algorithms.
+🛠️  keras: 38 algorithms.
+🛠️  torch: 27 algorithms.
+🛠️  transformers: 15 algorithms.
+🛠️  gensim: 23 algorithms.
+🛠️  spacy: 18 algorithms.
+...
+```
+
+### Verbose Output
+
+Show detailed algorithm information:
+
+```bash
+autogoal contrib list --verbose
+```
+
+**Output:**
+```
+⚙️  Found a total of 347 matching algorithms.
+🛠️  sklearn: 156 algorithms.
+ 🔹 DecisionTreeClassifier     : MatrixContinuousDense -> VectorCategorical
+ 🔹 RandomForestClassifier     : MatrixContinuousDense -> VectorCategorical
+ 🔹 LogisticRegression         : MatrixContinuousDense -> VectorCategorical
+ 🔹 SVC                         : MatrixContinuousDense -> VectorCategorical
+ 🔹 KNeighborsClassifier       : MatrixContinuousDense -> VectorCategorical
+ 🔹 GradientBoostingClassifier : MatrixContinuousDense -> VectorCategorical
+ ...
+🛠️  nltk: 42 algorithms.
+ 🔹 WordNetLemmatizer          : List[str] -> List[str]
+ 🔹 PorterStemmer              : List[str] -> List[str]
+ 🔹 SnowballStemmer            : List[str] -> List[str]
+ ...
+```
+
+Each line shows:
+- **Algorithm name**: Class name of the algorithm
+- **Input type**: Expected input data type
+- **Output type**: Produced output data type
+
+### Filtering by Name
+
+Find specific algorithms:
+
+```bash
+# Find all tree-based algorithms
+autogoal contrib list --include Tree --verbose
+```
+
+**Output:**
+```
+⚙️  Found a total of 12 matching algorithms.
+🛠️  sklearn: 12 algorithms.
+ 🔹 DecisionTreeClassifier    : MatrixContinuousDense -> VectorCategorical
+ 🔹 DecisionTreeRegressor     : MatrixContinuousDense -> VectorContinuous
+ 🔹 ExtraTreeClassifier       : MatrixContinuousDense -> VectorCategorical
+ 🔹 ExtraTreesClassifier      : MatrixContinuousDense -> VectorCategorical
+ ...
+```
+
+### Filtering by Type
+
+Find algorithms by input/output types:
+
+```bash
+# Find algorithms that work with text
+autogoal contrib list --input "List[str]" --verbose
+```
+
+**Output:**
+```
+⚙️  Found a total of 56 matching algorithms.
+🛠️  nltk: 28 algorithms.
+ 🔹 WordNetLemmatizer         : List[str] -> List[str]
+ 🔹 PorterStemmer             : List[str] -> List[str]
+ 🔹 WordTokenizer             : str -> List[str]
+ ...
+🛠️  gensim: 18 algorithms.
+ 🔹 Word2VecEmbedding         : List[str] -> MatrixContinuousDense
+ 🔹 Doc2VecEmbedding          : List[str] -> VectorContinuous
+ ...
+```
+
+### Excluding Patterns
+
+Exclude certain algorithms:
+
+```bash
+# List all classifiers except neural networks
+autogoal contrib list \
+  --include Classifier \
+  --exclude Neural \
+  --verbose
+```
+
+### Complex Filters
+
+Combine multiple filters:
+
+```bash
+# Find classifiers that take continuous matrices as input
+autogoal contrib list \
+  --include Classifier \
+  --input MatrixContinuousDense \
+  --output VectorCategorical \
+  --verbose
+```
+
+## Checking Contrib Status
+
+View the installation and readiness status of all contrib libraries.
+
+### Command
+
+```bash
+autogoal contrib status
+```
+
+### Example Output
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🛠️  Contrib          ┃ ✔️  Status              ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ autogoal.contrib.sklearn        │ 🟢  Ready               │
+│ autogoal.contrib.nltk           │ 🔴  Requires download   │
+│ autogoal.contrib.keras          │ 🟢  Ready               │
+│ autogoal.contrib.torch          │ 🔴  Required dependency │
+│ autogoal.contrib.transformers   │ 🟢  Ready               │
+│ autogoal.contrib.gensim         │ 🔴  Requires download   │
+│ autogoal.contrib.spacy          │ 🔴  Requires download   │
+└─────────────────────────────────┴─────────────────────────┘
+```
+
+### Status Indicators
+
+<CodeGroup>
+```bash Ready
+🟢  Ready
+# All dependencies installed
+# All resources downloaded
+# Contrib is fully functional
+```
+
+```bash Requires Download
+🔴  Requires download
+# Dependencies installed
+# Missing required data files
+# Fix: autogoal contrib download <name>
+```
+
+```bash Required Dependency
+🔴  Required dependency  
+# Missing Python packages
+# Fix: pip install autogoal[contrib]
+#   or: pip install <specific-package>
+```
+</CodeGroup>
+
+<Note>
+Some contribs like NLTK, spaCy, and Gensim require downloading large data files (corpora, models, etc.) even after the Python packages are installed.
+</Note>
+
+## Downloading Contrib Resources
+
+Download required data files for contrib libraries.
+
+### Command
+
+```bash
+autogoal contrib download <contrib_name>
+```
+
+<ParamField path="contrib" type="string" required>
+  Name of the contrib library (e.g., `sklearn`, `nltk`, `spacy`) or `all` to download resources for all contribs
+</ParamField>
+
+### Example Usage
+
+#### Download NLTK Data
+
+```bash
+autogoal contrib download nltk
+```
+
+**Output:**
+```
+✅ Successfully downloaded files for contrib `nltk`.
+```
+
+This downloads:
+- WordNet corpus
+- Punkt tokenizer models
+- Stopwords lists
+- Other required NLTK resources
+
+#### Download spaCy Models
+
+```bash
+autogoal contrib download spacy
+```
+
+**Output:**
+```
+✅ Successfully downloaded files for contrib `spacy`.
+```
+
+Downloads spaCy language models (e.g., `en_core_web_sm`).
+
+#### Download All Resources
+
+```bash
+autogoal contrib download all
+```
+
+<Warning>
+Downloading all contrib resources may take significant time and disk space (several GB for models and corpora).
+</Warning>
+
+#### Already Downloaded
+
+```bash
+autogoal contrib download sklearn
+```
+
+**Output:**
+```
+✅ Nothing to download for contrib `sklearn`.
+```
+
+Scikit-learn doesn't require additional downloads.
+
+### Download Failures
+
+```bash
+autogoal contrib download missing_contrib
+```
+
+**Output:**
+```
+❌ Cannot download files for contrib `missing_contrib`.
+```
+
+**Common causes:**
+- Contrib name misspelled
+- Network connection issues
+- Contrib not available
+
+## Understanding Contrib Types
+
+### Type System
+
+AutoGOAL uses a type system to ensure algorithms can be composed into valid pipelines:
+
+**Common input types:**
+- `MatrixContinuousDense` - Numeric feature matrix (most sklearn algorithms)
+- `MatrixContinuousSparse` - Sparse numeric matrix
+- `List[str]` - List of text documents
+- `str` - Single text string
+- `Tensor` - Neural network tensors
+
+**Common output types:**
+- `VectorCategorical` - Classification labels
+- `VectorContinuous` - Regression predictions
+- `MatrixContinuousDense` - Transformed features
+- `List[str]` - Processed text
+
+### Type Compatibility
+
+Algorithms can be chained if output type matches input type:
+
+```
+Tokenizer          WordNetLemmatizer    TfidfVectorizer     LogisticRegression
+str -> List[str] → List[str] -> List[str] → List[str] -> Matrix → Matrix -> Vector
+```
+
+AutoGOAL automatically finds compatible algorithm sequences.
+
+## Using Contrib Algorithms
+
+### In Python
+
+Access contrib algorithms directly:
+
+```python
+from autogoal_contrib.sklearn import (
+    DecisionTreeClassifier,
+    RandomForestClassifier,
+)
+from autogoal_contrib.nltk import WordNetLemmatizer
+
+# Use in pipelines
+from autogoal.ml import AutoML
+
+automl = AutoML()
+automl.fit(X, y)
+```
+
+### With AutoML CLI
+
+Contrib algorithms are automatically used during training:
+
+```bash
+# AutoML will search through all available contrib algorithms
+autogoal ml fit train.csv --target label
+```
+
+The search process explores algorithms from all installed and ready contrib libraries.
+
+## Contrib Workflow
+
+### Complete Setup
+
+```bash
+# Step 1: Install AutoGOAL with contrib
+pip install autogoal[contrib]
+
+# Step 2: Check what's available
+autogoal contrib status
+
+# Step 3: Download required resources
+autogoal contrib download nltk
+autogoal contrib download spacy
+
+# Step 4: Verify everything is ready
+autogoal contrib status
+
+# Step 5: Explore algorithms
+autogoal contrib list --verbose
+
+# Step 6: Train with contrib algorithms
+autogoal ml fit train.csv --target label
+```
+
+### Targeted Setup
+
+Install only what you need:
+
+```bash
+# For text processing
+pip install autogoal
+pip install nltk gensim
+autogoal contrib download nltk
+autogoal contrib list --include nltk --verbose
+
+# For deep learning  
+pip install autogoal
+pip install tensorflow transformers
+autogoal contrib list --include keras --verbose
+```
+
+## Troubleshooting
+
+### Missing autogoal-contrib
+
+```
+⚠️  Error: autogoal-contrib not installed
+```
+
+**Solution:**
+```bash
+pip install autogoal[contrib]
+```
+
+### Import Errors
+
+If contribs aren't found:
+
+```bash
+# Verify installation
+pip list | grep autogoal
+
+# Reinstall if needed
+pip install --upgrade autogoal[contrib]
+```
+
+### Download Failures
+
+If downloads fail:
+
+1. Check internet connection
+2. Verify contrib name spelling
+3. Check disk space
+4. Try downloading resources manually:
+
+```python
+# For NLTK
+import nltk
+nltk.download('all')
+
+# For spaCy
+import spacy
+spacy.cli.download('en_core_web_sm')
+```
+
+### Missing Dependencies
+
+```
+🔴  Required dependency
+```
+
+**Solution:**
+```bash
+# Install specific contrib dependencies
+pip install torch transformers  # For PyTorch
+pip install tensorflow keras      # For Keras
+pip install spacy                 # For spaCy
+```
+
+## Advanced Usage
+
+### Discovery Script
+
+Find algorithms for your task:
+
+```bash
+#!/bin/bash
+# find-algorithms.sh
+
+TASK="$1"  # e.g., "Classifier"
+INPUT_TYPE="$2"  # e.g., "MatrixContinuousDense"
+
+echo "Finding algorithms for task: $TASK"
+echo "Input type: $INPUT_TYPE"
+echo ""
+
+autogoal contrib list \
+    --include "$TASK" \
+    --input "$INPUT_TYPE" \
+    --verbose
+```
+
+Usage:
+```bash
+chmod +x find-algorithms.sh
+./find-algorithms.sh Classifier MatrixContinuousDense
+```
+
+### Algorithm Statistics
+
+Count algorithms by contrib:
+
+```bash
+#!/bin/bash
+# count-algorithms.sh
+
+autogoal contrib list | grep "🛠️" | while read -r line; do
+    contrib=$(echo "$line" | cut -d: -f1 | sed 's/🛠️  //')
+    count=$(echo "$line" | cut -d: -f2 | grep -o '[0-9]\+')
+    echo "$contrib: $count algorithms"
+done | sort -t: -k2 -nr
+```
+
+### Setup Verification
+
+```bash
+#!/bin/bash
+# verify-setup.sh
+
+echo "Checking AutoGOAL contrib setup..."
+echo ""
+
+# Check installation
+if pip show autogoal-contrib > /dev/null 2>&1; then
+    echo "✅ autogoal-contrib installed"
+else
+    echo "❌ autogoal-contrib not installed"
+    exit 1
+fi
+
+# Check status
+echo ""
+echo "Contrib Status:"
+autogoal contrib status
+
+# Count algorithms
+echo ""
+total=$(autogoal contrib list | grep "Found a total" | grep -o '[0-9]\+')
+echo "Total algorithms available: $total"
+
+echo ""
+echo "Setup verification complete!"
+```
+
+## Best Practices
+
+1. **Check status regularly**: Run `contrib status` after installing new packages
+2. **Download resources early**: Get required data files before training
+3. **Use filters effectively**: Narrow down algorithms with `--include`, `--exclude`, `--input`, `--output`
+4. **Install selectively**: Only install contribs you need to reduce dependencies
+5. **Keep updated**: Update contrib packages regularly for bug fixes and new algorithms
+6. **Explore with verbose**: Use `--verbose` to understand algorithm signatures
+
+<Tip>
+Create a project setup script that verifies all required contribs are ready before training:
+
+```bash
+#!/bin/bash
+CONTRIBS=("sklearn" "nltk" "keras")
+
+for contrib in "${CONTRIBS[@]}"; do
+    autogoal contrib download "$contrib"
+done
+
+autogoal contrib status
+```
+</Tip>
+
+## Contrib Extensions
+
+### Creating Custom Contribs
+
+You can create your own contrib libraries:
+
+1. Create a Python package with AutoGOAL-compatible wrappers
+2. Implement type annotations for input/output
+3. Add a Typer app for CLI commands (optional)
+4. Install alongside AutoGOAL
+
+**Example structure:**
+```
+autogoal_custom/
+├── __init__.py
+├── algorithms.py  # Your wrapped algorithms
+└── typer_app.py   # Optional CLI commands
+```
+
+See [Development Guide](/development) for details.
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Training with Contrib" icon="graduation-cap" href="/cli/training">
+    Use contrib algorithms in training
+  </Card>
+  <Card title="Python API" icon="code" href="/api/automl">
+    Access contribs programmatically
+  </Card>
+  <Card title="Development Guide" icon="hammer" href="/guides/contrib-system">
+    Create custom contrib libraries
+  </Card>
+  <Card title="Installation" icon="puzzle-piece" href="/installation">
+    Detailed dependency information
+  </Card>
+</CardGroup>

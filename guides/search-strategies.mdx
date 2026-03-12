@@ -1,0 +1,556 @@
+---
+title: Search Strategies
+description: Implement and customize search strategies for optimizing AutoML pipelines
+---
+
+## Overview
+
+AutoGOAL's search strategies determine how pipelines and hyperparameters are explored during optimization. This guide covers built-in strategies and how to implement custom ones.
+
+## Understanding Search Algorithms
+
+All search strategies inherit from `SearchAlgorithm` (autogoal/search/_base.py:22), which provides:
+
+- Population-based optimization
+- Multi-objective support
+- Timeout and memory management
+- Early stopping
+- Logging and progress tracking
+
+## Built-in Search Strategies
+
+### Random Search
+
+The simplest strategy - randomly samples from the search space:
+
+```python
+from autogoal.search import RandomSearch
+from autogoal.ml import AutoML
+
+automl = AutoML(
+    search_algorithm=RandomSearch,
+    search_iterations=100,
+    random_state=42
+)
+
+automl.fit(X_train, y_train)
+```
+
+<Note>
+`RandomSearch` is useful as a baseline and for quick prototyping. It doesn't learn from previous evaluations.
+</Note>
+
+### Probabilistic Grammar Evolution (PGE)
+
+PGE learns a probabilistic model of successful pipelines:
+
+```python
+from autogoal.search import PESearch
+
+automl = AutoML(
+    search_algorithm=PESearch,
+    search_iterations=1000,
+    learning_factor=0.05,      # Learning rate for model updates
+    selection=0.2,             # Top 20% of solutions used for learning
+    epsilon_greed=0.1,         # 10% random exploration
+    random_state=42
+)
+```
+
+**How PGE Works:**
+
+<Steps>
+
+### Step 1: Random Exploration
+Initially samples pipelines randomly (ε-greedy exploration)
+
+### Step 2: Evaluation
+Evaluates each pipeline's fitness on your dataset
+
+### Step 3: Model Learning
+Updates probabilistic model based on top performers
+
+### Step 4: Guided Sampling
+Samples new pipelines from learned distribution
+
+</Steps>
+
+**Key Parameters:**
+
+- **`learning_factor`** (0.0-1.0): How quickly the model adapts. Higher = faster learning but less stable
+- **`selection`** (0.0-1.0): Fraction of best solutions used for learning. Default 0.2 = top 20%
+- **`epsilon_greed`** (0.0-1.0): Fraction of random samples for exploration. Prevents premature convergence
+
+### Non-dominated Sorting PGE (NSPGE)
+
+For multi-objective optimization:
+
+```python
+from autogoal.search import NSPESearch
+from autogoal.ml.metrics import accuracy, model_complexity
+
+automl = AutoML(
+    search_algorithm=NSPESearch,
+    objectives=(accuracy, model_complexity),  # Multiple objectives
+    search_iterations=1000
+)
+```
+
+<Tip>
+Use NSPGE when you want to optimize multiple conflicting objectives, like accuracy vs. model size or speed.
+</Tip>
+
+### Surrogate Search
+
+Uses a surrogate model to predict pipeline performance:
+
+```python
+from autogoal.search import SurrogateSearch, PESearch
+from sklearn.ensemble import RandomForestRegressor
+
+automl = AutoML(
+    search_algorithm=lambda *args, **kwargs: SurrogateSearch(
+        base_search=lambda: PESearch(*args, **kwargs),
+        estimator=RandomForestRegressor(),
+        generation_size=10,
+        initial_pop_size=50,
+        *args,
+        **kwargs
+    ),
+    search_iterations=500
+)
+```
+
+## Creating Custom Search Strategies
+
+### Basic Structure
+
+Here's the minimal structure for a custom search strategy:
+
+```python
+from autogoal.search import SearchAlgorithm
+from autogoal.sampling import Sampler
+
+class MyCustomSearch(SearchAlgorithm):
+    def __init__(self, *args, random_state=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sampler = Sampler(random_state=random_state)
+        # Your custom initialization
+    
+    def _build_sampler(self):
+        """Return a sampler for generating solutions."""
+        return self._sampler
+    
+    def _start_generation(self):
+        """Called at the start of each generation."""
+        pass
+    
+    def _finish_generation(self, fns):
+        """Called at the end of each generation.
+        
+        Args:
+            fns: List of fitness values from this generation
+        """
+        pass
+```
+
+<Warning>
+You must implement `_build_sampler()`. This method is called for each new solution.
+</Warning>
+
+### Example: Hill Climbing Search
+
+Let's implement a simple hill climbing strategy:
+
+```python
+from autogoal.search import SearchAlgorithm
+from autogoal.sampling import ModelSampler
+import random
+
+class HillClimbingSearch(SearchAlgorithm):
+    """Hill climbing with random restarts."""
+    
+    def __init__(
+        self,
+        *args,
+        perturbation_rate: float = 0.1,
+        restart_after: int = 10,
+        random_state: int = None,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.perturbation_rate = perturbation_rate
+        self.restart_after = restart_after
+        self._random = random.Random(random_state)
+        
+        # Track best solution
+        self._best_solution = None
+        self._best_sampler = None
+        self._no_improvement = 0
+    
+    def _build_sampler(self):
+        """Build sampler, either from best or random."""
+        # Random restart if stuck
+        if self._no_improvement >= self.restart_after:
+            self._no_improvement = 0
+            return ModelSampler(random_state=self._random.randint(0, 2**31))
+        
+        # Start from best known solution
+        if self._best_sampler is not None:
+            # Perturb the best solution
+            return self._perturb_sampler(self._best_sampler)
+        
+        # Initial random sample
+        return ModelSampler(random_state=self._random.randint(0, 2**31))
+    
+    def _perturb_sampler(self, sampler):
+        """Create a perturbation of the sampler's model."""
+        # Copy the model and apply random perturbations
+        model = sampler.model.copy() if hasattr(sampler, 'model') else {}
+        
+        for key in model:
+            if self._random.random() < self.perturbation_rate:
+                # Perturb this parameter
+                if isinstance(model[key], dict):
+                    # Adjust probability distribution
+                    self._perturb_distribution(model[key])
+        
+        return ModelSampler(model, random_state=self._random.randint(0, 2**31))
+    
+    def _perturb_distribution(self, dist):
+        """Randomly adjust a probability distribution."""
+        for key in dist:
+            # Add random noise
+            dist[key] += self._random.gauss(0, 0.1)
+            dist[key] = max(0, dist[key])  # Keep non-negative
+        
+        # Re-normalize
+        total = sum(dist.values())
+        if total > 0:
+            for key in dist:
+                dist[key] /= total
+    
+    def _finish_generation(self, fns):
+        """Update best solution tracking."""
+        # Check if we found a better solution
+        # (handled automatically by SearchAlgorithm base class)
+        # Here we just track no-improvement counter
+        if not self._improved_this_generation:
+            self._no_improvement += 1
+        else:
+            self._no_improvement = 0
+    
+    def _start_generation(self):
+        """Reset improvement flag."""
+        self._improved_this_generation = False
+```
+
+Usage:
+
+```python
+from autogoal.ml import AutoML
+
+automl = AutoML(
+    search_algorithm=HillClimbingSearch,
+    perturbation_rate=0.15,
+    restart_after=20,
+    search_iterations=500
+)
+```
+
+### Example: Genetic Algorithm
+
+A more sophisticated evolutionary approach:
+
+```python
+from autogoal.search import SearchAlgorithm
+from autogoal.sampling import ModelSampler, merge_updates, update_model
+import random
+
+class GeneticSearch(SearchAlgorithm):
+    """Genetic algorithm with crossover and mutation."""
+    
+    def __init__(
+        self,
+        *args,
+        mutation_rate: float = 0.1,
+        crossover_rate: float = 0.7,
+        tournament_size: int = 3,
+        elitism: int = 2,
+        random_state: int = None,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.mutation_rate = mutation_rate
+        self.crossover_rate = crossover_rate
+        self.tournament_size = tournament_size
+        self.elitism = elitism
+        self._random = random.Random(random_state)
+        
+        self._population = []  # List of (sampler, fitness) tuples
+        self._generation_samplers = []
+    
+    def _start_generation(self):
+        """Initialize tracking for this generation."""
+        self._generation_samplers = []
+    
+    def _build_sampler(self):
+        """Generate a new individual via selection and genetic operators."""
+        if len(self._population) < self._pop_size:
+            # Initial random population
+            sampler = ModelSampler(random_state=self._random.randint(0, 2**31))
+        else:
+            # Apply genetic operators
+            if self._random.random() < self.crossover_rate:
+                sampler = self._crossover()
+            else:
+                sampler = self._select_parent()
+            
+            # Apply mutation
+            if self._random.random() < self.mutation_rate:
+                sampler = self._mutate(sampler)
+        
+        self._generation_samplers.append(sampler)
+        return sampler
+    
+    def _select_parent(self):
+        """Tournament selection."""
+        tournament = self._random.sample(
+            self._population,
+            min(self.tournament_size, len(self._population))
+        )
+        # Select best from tournament
+        best = max(tournament, key=lambda x: x[1][0])  # x[1][0] is fitness
+        return best[0]
+    
+    def _crossover(self):
+        """Uniform crossover of two parents."""
+        parent1 = self._select_parent()
+        parent2 = self._select_parent()
+        
+        # Merge models from both parents
+        model1 = getattr(parent1, 'model', {})
+        model2 = getattr(parent2, 'model', {})
+        
+        child_model = {}
+        all_keys = set(model1.keys()) | set(model2.keys())
+        
+        for key in all_keys:
+            # Randomly inherit from either parent
+            if self._random.random() < 0.5 and key in model1:
+                child_model[key] = model1[key].copy()
+            elif key in model2:
+                child_model[key] = model2[key].copy()
+        
+        return ModelSampler(child_model, random_state=self._random.randint(0, 2**31))
+    
+    def _mutate(self, sampler):
+        """Apply random mutations to a sampler."""
+        model = getattr(sampler, 'model', {}).copy()
+        
+        for key in model:
+            if self._random.random() < self.mutation_rate:
+                if isinstance(model[key], dict):
+                    # Mutate probability distribution
+                    self._mutate_distribution(model[key])
+        
+        return ModelSampler(model, random_state=self._random.randint(0, 2**31))
+    
+    def _mutate_distribution(self, dist):
+        """Randomly mutate a probability distribution."""
+        keys = list(dist.keys())
+        if keys:
+            # Randomly adjust one entry
+            key = self._random.choice(keys)
+            dist[key] += self._random.gauss(0, 0.2)
+            dist[key] = max(0.01, min(0.99, dist[key]))
+            
+            # Re-normalize
+            total = sum(dist.values())
+            for k in dist:
+                dist[k] /= total
+    
+    def _finish_generation(self, fns):
+        """Update population with new generation."""
+        # Create new population from generation
+        new_population = list(zip(self._generation_samplers, fns))
+        
+        # Combine with old population
+        self._population.extend(new_population)
+        
+        # Sort by fitness (assuming single objective)
+        self._population.sort(key=lambda x: x[1][0], reverse=self._maximize[0])
+        
+        # Keep only top pop_size (with elitism)
+        self._population = self._population[:self._pop_size]
+```
+
+## Advanced Features
+
+### Multi-Objective Optimization
+
+Handle multiple conflicting objectives:
+
+```python
+from autogoal.search import SearchAlgorithm
+from autogoal.search.utils import dominates, non_dominated_sort
+
+class MultiObjectiveSearch(SearchAlgorithm):
+    def __init__(self, *args, **kwargs):
+        # Ensure maximize is a tuple
+        if 'maximize' not in kwargs:
+            kwargs['maximize'] = (True, True)  # Two objectives
+        super().__init__(*args, **kwargs)
+    
+    def _finish_generation(self, fns):
+        """Update Pareto front."""
+        # fns is a list of tuples: [(obj1, obj2), ...]
+        
+        # Find non-dominated solutions (Pareto front)
+        fronts = non_dominated_sort(fns, self._maximize)
+        pareto_front = fronts[0]  # First front is non-dominated
+        
+        # Store Pareto optimal solutions
+        self._pareto_solutions = [self._generation_samplers[i] for i in pareto_front]
+```
+
+### Custom Ranking Functions
+
+Define how solutions are ranked:
+
+```python
+def custom_ranking(solutions, fitnesses):
+    """Custom ranking based on fitness and complexity."""
+    rankings = []
+    for solution, fitness in zip(solutions, fitnesses):
+        # Penalize complex solutions
+        complexity = len(str(solution))
+        adjusted_score = fitness[0] - 0.001 * complexity
+        rankings.append(adjusted_score)
+    return rankings
+
+automl = AutoML(
+    search_algorithm=PESearch,
+    ranking_fn=custom_ranking
+)
+```
+
+### Logging and Monitoring
+
+Use built-in loggers to track search progress:
+
+```python
+from autogoal.search import RichLogger, MemoryLogger, JsonLogger, ConsoleLogger
+
+# Multiple loggers
+memory_logger = MemoryLogger()
+json_logger = JsonLogger('search_log.json')
+
+automl = AutoML(
+    search_algorithm=PESearch,
+    logger=[memory_logger, json_logger]
+)
+
+automl.fit(X, y)
+
+# Access logged data
+print(f"Best fitness per generation: {memory_logger.generation_best_fn}")
+print(f"Mean fitness per generation: {memory_logger.generation_mean_fn}")
+```
+
+### State Persistence
+
+Save and resume search state:
+
+```python
+from autogoal.search import PESearch
+import pickle
+
+# Enable state saving
+search = PESearch(
+    generator_fn=pipeline_builder,
+    fitness_fn=fitness_function,
+    name='my_search',
+    save=True  # Saves model to 'model-my_search.pickle'
+)
+
+best_solutions, best_scores = search.run(generations=100)
+
+# Later, load and continue
+new_search = PESearch(
+    generator_fn=pipeline_builder,
+    fitness_fn=fitness_function
+)
+new_search.load('model-my_search.pickle')
+best_solutions, best_scores = new_search.run(generations=100)  # Continue from saved state
+```
+
+## Configuration Options
+
+Common parameters for all search strategies:
+
+```python
+search = SearchAlgorithm(
+    generator_fn=pipeline_builder,      # Function to generate pipelines
+    fitness_fn=fitness_function,        # Function to evaluate pipelines
+    pop_size=20,                        # Population size per generation
+    maximize=(True,),                   # Maximize fitness (or minimize with False)
+    errors='raise',                     # Error handling: 'raise', 'warn', or 'ignore'
+    early_stop=0.5,                     # Stop after 50% of generations without improvement
+    evaluation_timeout=300,             # 5 minutes per pipeline evaluation
+    memory_limit=4*1024**3,            # 4GB memory limit per evaluation
+    search_timeout=3600,                # 1 hour total search time
+    target_fn=(0.95,),                 # Stop if fitness reaches 0.95
+    allow_duplicates=False,             # Skip duplicate pipelines
+    logger=None                         # Logger instance
+)
+```
+
+<Tip>
+Set `allow_duplicates=False` to avoid wasting time on solutions already evaluated.
+</Tip>
+
+## Performance Tips
+
+<CardGroup cols={2}>
+
+<Card title="Population Size" icon="users">
+Larger populations explore more but take longer. Start with 20-50.
+</Card>
+
+<Card title="Evaluation Timeout" icon="clock">
+Set realistic timeouts. Complex pipelines may need 5-10 minutes.
+</Card>
+
+<Card title="Early Stopping" icon="stop">
+Stop after 30-50% of iterations without improvement to save time.
+</Card>
+
+<Card title="Memory Limits" icon="memory">
+Prevent OOM errors by setting per-pipeline memory limits.
+</Card>
+
+</CardGroup>
+
+## Comparison of Strategies
+
+| Strategy | Best For | Pros | Cons |
+|----------|----------|------|------|
+| **RandomSearch** | Baseline, quick tests | Simple, no tuning needed | No learning, inefficient |
+| **PESearch** | General purpose | Learns from experience, efficient | Requires tuning learning rate |
+| **NSPESearch** | Multi-objective | Finds Pareto front | Slower convergence |
+| **SurrogateSearch** | Expensive fitness | Reduces evaluations | Requires good initial population |
+
+## Next Steps
+
+<CardGroup cols={2}>
+
+<Card title="Custom Algorithms" href="/guides/custom-algorithms" icon="code">
+Create algorithms to optimize with these strategies
+</Card>
+
+<Card title="Remote Execution" href="/guides/remote-execution" icon="server">
+Scale your search across multiple machines
+</Card>
+
+</CardGroup>

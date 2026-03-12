@@ -1,0 +1,712 @@
+---
+title: "AutoML"
+description: "Complete API reference for the AutoML class - automated machine learning with pipeline search"
+---
+
+## Overview
+
+The `AutoML` class provides a high-level interface for automated machine learning. It automatically searches for the best machine learning pipeline by exploring different combinations of algorithms and hyperparameters.
+
+## Constructor
+
+```python
+from autogoal.ml import AutoML
+
+automl = AutoML(
+    input=None,
+    output=None,
+    random_state=None,
+    search_algorithm=None,
+    search_iterations=100,
+    include_filter=".*",
+    exclude_filter=None,
+    validation_split=0.3,
+    errors="warn",
+    cross_validation="median",
+    cross_validation_steps=3,
+    registry=None,
+    objectives=None,
+    remote_sources=None,
+    **search_kwargs
+)
+```
+
+### Parameters
+
+<ParamField path="input" type="SemanticType | None" default="None">
+  The input semantic type. If not provided, will be automatically inferred from the data during `fit()`.
+</ParamField>
+
+<ParamField path="output" type="SemanticType | None" default="None">
+  The output semantic type. If not provided, will be automatically inferred from the labels during `fit()`.
+</ParamField>
+
+<ParamField path="random_state" type="int | None" default="None">
+  Random seed for reproducibility. Sets `numpy.random.seed()` if provided.
+</ParamField>
+
+<ParamField path="search_algorithm" type="class | None" default="PESearch">
+  The search algorithm class to use. Defaults to `PESearch` (Progressive Evolution Search).
+</ParamField>
+
+<ParamField path="search_iterations" type="int" default="100">
+  Maximum number of iterations for the search algorithm.
+</ParamField>
+
+<ParamField path="include_filter" type="str" default=".*">
+  Regex pattern to include specific algorithms in the search space.
+</ParamField>
+
+<ParamField path="exclude_filter" type="str | None" default="None">
+  Regex pattern to exclude specific algorithms from the search space.
+</ParamField>
+
+<ParamField path="validation_split" type="float" default="0.3">
+  Fraction of data to use for validation during pipeline evaluation (0.0 to 1.0).
+</ParamField>
+
+<ParamField path="errors" type="str" default="warn">
+  How to handle errors during pipeline evaluation. Options: `"warn"`, `"raise"`, or `"ignore"`.
+</ParamField>
+
+<ParamField path="cross_validation" type="str" default="median">
+  Strategy for aggregating cross-validation scores. Options: `"median"`, `"mean"`, etc.
+</ParamField>
+
+<ParamField path="cross_validation_steps" type="int" default="3">
+  Number of cross-validation folds to use during pipeline evaluation.
+</ParamField>
+
+<ParamField path="registry" type="list | None" default="None">
+  Custom algorithm registry. If not provided, algorithms will be automatically discovered using `autogoal-contrib`.
+</ParamField>
+
+<ParamField path="objectives" type="callable | tuple | list" default="accuracy">
+  Objective function(s) to optimize. Can be a single function or a tuple/list of functions for multi-objective optimization.
+</ParamField>
+
+<ParamField path="remote_sources" type="List[Tuple[str, int] | str] | None" default="None">
+  Remote algorithm sources to include in the search space.
+</ParamField>
+
+<ParamField path="**search_kwargs" type="dict">
+  Additional keyword arguments passed to the search algorithm constructor.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+```python Basic Usage
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+# Load dataset
+X, y = cars.load()
+
+# Create AutoML instance with automatic type inference
+automl = AutoML(
+    search_iterations=100,
+    random_state=42
+)
+
+# Fit the model
+automl.fit(X, y)
+```
+
+```python With Type Specifications
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.datasets import cars
+
+# Load dataset
+X, y = cars.load()
+
+# Create AutoML instance with explicit types
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=100,
+    random_state=42
+)
+
+# Fit the model
+automl.fit(X, y)
+```
+
+```python Custom Search Algorithm
+from autogoal.ml import AutoML
+from autogoal.search import RandomSearch
+from autogoal.datasets import cars
+
+# Load dataset
+X, y = cars.load()
+
+# Create AutoML instance with custom search
+automl = AutoML(
+    search_algorithm=RandomSearch,
+    search_iterations=50,
+    pop_size=20,
+    random_state=42
+)
+
+# Fit the model
+automl.fit(X, y)
+```
+</CodeGroup>
+
+## Methods
+
+### fit()
+
+Fits the AutoML instance by searching for the best pipeline and training it on the provided data.
+
+```python
+automl.fit(X, y=None, **kwargs)
+```
+
+#### Parameters
+
+<ParamField path="X" type="array-like" required>
+  Training data. The input semantic type will be automatically inferred if not provided in the constructor.
+</ParamField>
+
+<ParamField path="y" type="array-like | None" default="None">
+  Target labels for supervised learning. For unsupervised learning, set to `None`.
+</ParamField>
+
+<ParamField path="**kwargs" type="dict">
+  Additional keyword arguments passed to the search algorithm's `run()` method.
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+X, y = cars.load()
+automl = AutoML(search_iterations=100)
+automl.fit(X, y)
+
+print(f"Best score: {automl.best_scores_}")
+print(f"Best pipelines: {automl.best_pipelines_}")
+```
+
+### predict()
+
+Computes predictions using the best pipeline found during search.
+
+```python
+y_pred = automl.predict(X, solution_index=0)
+```
+
+#### Parameters
+
+<ParamField path="X" type="array-like" required>
+  Data to predict on.
+</ParamField>
+
+<ParamField path="solution_index" type="int" default="0">
+  Index of the solution to use for prediction (if multiple optimal pipelines were found).
+</ParamField>
+
+#### Returns
+
+<ResponseField name="y_pred" type="array-like">
+  Predictions for the input data.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+from sklearn.model_selection import train_test_split
+
+# Load and split data
+X, y = cars.load()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+# Train AutoML
+automl = AutoML(search_iterations=100)
+automl.fit(X_train, y_train)
+
+# Make predictions
+y_pred = automl.predict(X_test)
+```
+
+### predict_all()
+
+Computes predictions using all optimal pipelines found during search.
+
+```python
+predictions = automl.predict_all(X)
+```
+
+#### Parameters
+
+<ParamField path="X" type="array-like" required>
+  Data to predict on.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="predictions" type="list">
+  List of predictions from each optimal pipeline.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+X, y = cars.load()
+automl = AutoML(search_iterations=100)
+automl.fit(X, y)
+
+# Get predictions from all pipelines
+all_predictions = automl.predict_all(X[:10])
+print(f"Predictions from {len(all_predictions)} pipelines")
+```
+
+### score()
+
+Computes the score of the best pipelines on the given dataset.
+
+```python
+scores = automl.score(X, y=None, solution_index=None)
+```
+
+#### Parameters
+
+<ParamField path="X" type="array-like" required>
+  Data to evaluate on.
+</ParamField>
+
+<ParamField path="y" type="array-like | None" default="None">
+  True labels for supervised learning. For unsupervised learning, set to `None`.
+</ParamField>
+
+<ParamField path="solution_index" type="int | None" default="None">
+  Index of a specific solution to score. If `None`, scores all optimal pipelines.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="scores" type="list">
+  List of tuples containing objective scores for each pipeline.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+from sklearn.model_selection import train_test_split
+
+X, y = cars.load()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+automl = AutoML(search_iterations=100)
+automl.fit(X_train, y_train)
+
+# Score on test set
+scores = automl.score(X_test, y_test)
+print(f"Test scores: {scores}")
+```
+
+### serialize()
+
+Serializes the AutoML instance's pipelines to a list of strings.
+
+```python
+serialized = automl.serialize(pipelines=None)
+```
+
+#### Parameters
+
+<ParamField path="pipelines" type="List[Pipeline] | None" default="None">
+  Specific pipelines to serialize. If `None`, serializes all optimal pipelines.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="serialized" type="List[str]">
+  List of serialized pipeline strings.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+X, y = cars.load()
+automl = AutoML(search_iterations=100)
+automl.fit(X, y)
+
+# Serialize pipelines
+serialized = automl.serialize()
+print(f"Serialized {len(serialized)} pipelines")
+```
+
+### deserialize()
+
+Deserializes pipelines from a list of strings.
+
+```python
+automl.deserialize(serialization)
+```
+
+#### Parameters
+
+<ParamField path="serialization" type="List[str]" required>
+  List of serialized pipeline strings.
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+
+# Create new AutoML instance
+automl = AutoML()
+
+# Deserialize previously saved pipelines
+serialized_pipelines = [...]  # Load from file
+automl.deserialize(serialized_pipelines)
+
+# Use deserialized pipelines
+y_pred = automl.predict(X_test)
+```
+
+### folder_save()
+
+Serializes and saves the AutoML instance to a directory structure.
+
+```python
+automl.folder_save(path, pipelines=None)
+```
+
+#### Parameters
+
+<ParamField path="path" type="Path" required>
+  Directory path where the AutoML instance will be saved.
+</ParamField>
+
+<ParamField path="pipelines" type="List[Pipeline] | None" default="None">
+  Specific pipelines to save. If `None`, saves all optimal pipelines.
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+from pathlib import Path
+
+X, y = cars.load()
+automl = AutoML(search_iterations=100)
+automl.fit(X, y)
+
+# Save to directory
+save_path = Path("./my_automl_model")
+automl.folder_save(save_path)
+```
+
+### folder_load()
+
+Deserializes an AutoML instance from a directory.
+
+```python
+automl = AutoML.folder_load(path=None)
+```
+
+#### Parameters
+
+<ParamField path="path" type="Path | None" default="None">
+  Directory path from which to load the AutoML instance. If `None`, defaults to `./autogoal-export`.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="automl" type="AutoML">
+  The loaded AutoML instance with fitted pipelines ready to use.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from pathlib import Path
+
+# Load previously saved AutoML instance
+load_path = Path("./my_automl_model")
+automl = AutoML.folder_load(load_path)
+
+# Use loaded model for predictions
+y_pred = automl.predict(X_test)
+```
+
+### export_portable()
+
+Generates a portable set of files that can be used to export the model into a Docker image.
+
+```python
+path = automl.export_portable(
+    path=None,
+    pipelines=None,
+    generate_zip=False
+)
+```
+
+#### Parameters
+
+<ParamField path="path" type="str | None" default="None">
+  Directory path where the portable files will be saved. If `None`, uses current working directory.
+</ParamField>
+
+<ParamField path="pipelines" type="List[Pipeline] | None" default="None">
+  Specific pipelines to export. If `None`, exports all optimal pipelines.
+</ParamField>
+
+<ParamField path="generate_zip" type="bool" default="False">
+  Whether to generate a zip file containing all exported assets.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="path" type="str">
+  Path to the exported assets directory, or path to the zip file if `generate_zip=True`.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+X, y = cars.load()
+automl = AutoML(search_iterations=100)
+automl.fit(X, y)
+
+# Export as portable package
+export_path = automl.export_portable(
+    path="./exports",
+    generate_zip=True
+)
+print(f"Exported to: {export_path}")
+```
+
+### make_fitness_fn()
+
+Creates a fitness function to evaluate pipelines during search.
+
+```python
+fitness_fn = automl.make_fitness_fn(X, y=None)
+```
+
+#### Parameters
+
+<ParamField path="X" type="array-like" required>
+  Training data.
+</ParamField>
+
+<ParamField path="y" type="array-like | None" default="None">
+  Target labels. For unsupervised learning, set to `None`.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="fitness_fn" type="callable">
+  A function that evaluates pipeline fitness using cross-validation.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+
+X, y = cars.load()
+automl = AutoML()
+
+# Create fitness function
+fitness_fn = automl.make_fitness_fn(X, y)
+
+# Use with custom pipeline
+from autogoal.kb import Pipeline
+pipeline = Pipeline([...])  # Your custom pipeline
+score = fitness_fn(pipeline)
+```
+
+### make_pipeline_builder()
+
+Creates a pipeline builder function that generates random pipelines from the search space.
+
+```python
+builder = automl.make_pipeline_builder()
+```
+
+#### Returns
+
+<ResponseField name="builder" type="callable">
+  A function that generates random pipelines based on the configured search space.
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+
+automl = AutoML(
+    input=MatrixContinuousDense,
+    output=VectorCategorical
+)
+
+# Create pipeline builder
+builder = automl.make_pipeline_builder()
+
+# Generate random pipeline
+pipeline = builder()
+print(pipeline)
+```
+
+## Attributes
+
+After calling `fit()`, the following attributes are available:
+
+<ResponseField name="best_pipelines_" type="List[Pipeline]">
+  List of the best pipelines found during search (Pareto front for multi-objective optimization).
+</ResponseField>
+
+<ResponseField name="best_scores_" type="List[Tuple[float, ...]]">
+  Scores corresponding to each pipeline in `best_pipelines_`.
+</ResponseField>
+
+<ResponseField name="input" type="SemanticType">
+  The inferred or specified input semantic type.
+</ResponseField>
+
+<ResponseField name="output" type="SemanticType">
+  The inferred or specified output semantic type.
+</ResponseField>
+
+## Complete Example
+
+<CodeGroup>
+```python Classification Task
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+# Load dataset
+X, y = load_iris(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# Create and fit AutoML
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=50,
+    random_state=42,
+    cross_validation_steps=5
+)
+
+automl.fit(X_train, y_train)
+
+# Evaluate
+y_pred = automl.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f"Test Accuracy: {accuracy:.4f}")
+print(f"Best Pipeline: {automl.best_pipelines_[0]}")
+```
+
+```python Regression Task
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorContinuous
+from sklearn.datasets import load_diabetes
+from sklearn.model_selection import train_test_split
+from autogoal.ml.metrics import mse
+
+# Load dataset
+X, y = load_diabetes(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# Create and fit AutoML with MSE objective
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorContinuous]),
+    output=VectorContinuous,
+    objectives=mse,
+    search_iterations=50,
+    random_state=42
+)
+
+automl.fit(X_train, y_train)
+
+# Evaluate
+y_pred = automl.predict(X_test)
+test_mse = mse(y_test, y_pred)
+
+print(f"Test MSE: {test_mse:.4f}")
+print(f"Best Pipeline: {automl.best_pipelines_[0]}")
+```
+
+```python Save and Load
+from autogoal.ml import AutoML
+from autogoal.datasets import cars
+from pathlib import Path
+
+# Train and save
+X_train, y_train = cars.load()
+automl = AutoML(search_iterations=50, random_state=42)
+automl.fit(X_train, y_train)
+
+save_path = Path("./my_model")
+automl.folder_save(save_path)
+
+# Later, load and use
+automl_loaded = AutoML.folder_load(save_path)
+y_pred = automl_loaded.predict(X_test)
+```
+</CodeGroup>
+
+## Notes
+
+<Note>
+  The AutoML class requires `autogoal-contrib` to be installed for automatic algorithm discovery. Install it with `pip install autogoal-contrib`.
+</Note>
+
+<Warning>
+  Always call `fit()` before using prediction methods. Attempting to predict on an unfitted AutoML instance will raise a `TypeError`.
+</Warning>
+
+<Tip>
+  For faster experimentation, reduce `search_iterations` to 10-20. For production use, increase to 100+ for better results.
+</Tip>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="optimize() Function" icon="sliders" href="/api/optimize">
+    Black-box optimization for any Python function
+  </Card>
+  <Card title="Search Algorithms" icon="magnifying-glass" href="/concepts/optimization">
+    Learn about different search strategies
+  </Card>
+  <Card title="Semantic Types" icon="tags" href="/concepts/semantic-types">
+    Understanding AutoGOAL's type system
+  </Card>
+  <Card title="Pipeline Guide" icon="sitemap" href="/concepts/pipelines">
+    Working with pipelines directly
+  </Card>
+</CardGroup>

@@ -1,0 +1,633 @@
+---
+title: "Algorithm Classes"
+description: "Base classes for defining composable algorithms and pipelines"
+---
+
+## Overview
+
+The algorithm module (`autogoal.kb._algorithm`) provides abstract base classes for defining machine learning algorithms that can be automatically composed into pipelines.
+
+<Info>
+All algorithms in AutoGOAL inherit from `AlgorithmBase` and declare their input/output types using Python type annotations.
+</Info>
+
+## Core Classes
+
+### Algorithm
+
+`Algorithm` is the abstract base class that defines the interface all algorithms must implement.
+
+<ParamField path="Algorithm" type="abstract class">
+  Abstract interface for algorithms with introspection capabilities.
+</ParamField>
+
+#### Class Methods
+
+<ResponseField name="input_types()" type="Tuple[type]">
+  Returns an ordered tuple of the expected semantic input types of the `run` method.
+  
+  ```python
+  class MyAlgorithm(AlgorithmBase):
+      def run(self, x: int, y: str) -> float:
+          pass
+  
+  MyAlgorithm.input_types()  # (int, str)
+  ```
+</ResponseField>
+
+<ResponseField name="input_args()" type="Tuple[str]">
+  Returns an ordered tuple of the names of the arguments in the `run` method.
+  
+  ```python
+  MyAlgorithm.input_args()  # ('x', 'y')
+  ```
+</ResponseField>
+
+<ResponseField name="output_type()" type="type">
+  Returns the expected semantic output type of the `run` method.
+  
+  ```python
+  MyAlgorithm.output_type()  # float
+  ```
+</ResponseField>
+
+<ResponseField name="is_compatible_with(input_types)" type="bool">
+  Determines if the algorithm is compatible with a set of input types.
+  
+  <ParamField path="input_types" type="List[type]" required>
+    List of available types to check compatibility against.
+  </ParamField>
+  
+  ```python
+  class A(AlgorithmBase):
+      def run(self, x: int) -> float:
+          pass
+  
+  A.is_compatible_with([int])        # True
+  A.is_compatible_with([str, int])   # True (has int)
+  A.is_compatible_with([str])        # False (missing int)
+  ```
+</ResponseField>
+
+#### Instance Methods
+
+<ResponseField name="run(*args)" type="Any">
+  Executes the algorithm with the given inputs. Must be implemented by subclasses.
+  
+  <ParamField path="args" type="Any" required>
+    Input arguments matching the declared input types.
+  </ParamField>
+</ResponseField>
+
+---
+
+### AlgorithmBase
+
+`AlgorithmBase` is the recommended base class for implementing custom algorithms. It automatically implements introspection methods using the `inspect` module.
+
+<ParamField path="AlgorithmBase" type="class">
+  Concrete base class with automatic type introspection from method signatures.
+</ParamField>
+
+#### Key Features
+
+- **Automatic Introspection**: Extracts type information from `run()` method signature
+- **Serialization Support**: Built-in `save()` and `load()` methods
+- **Parameter Access**: `init_input_types()` for constructor parameters
+
+#### Usage Example
+
+```python
+from autogoal.kb import AlgorithmBase, MatrixContinuousDense, VectorContinuous
+from autogoal.grammar import Continuous
+
+class LinearScaler(AlgorithmBase):
+    def __init__(self, scale_factor: Continuous(0.1, 10.0)):
+        self.scale_factor = scale_factor
+    
+    def run(self, X: MatrixContinuousDense) -> MatrixContinuousDense:
+        return X * self.scale_factor
+
+# Type introspection works automatically
+print(LinearScaler.input_types())   # (MatrixContinuousDense,)
+print(LinearScaler.output_type())   # MatrixContinuousDense
+print(LinearScaler.input_args())    # ('X',)
+```
+
+#### Class Methods
+
+<ResponseField name="init_input_types()" type="Tuple[type]">
+  Returns the type annotations from the `__init__` method parameters.
+  
+  ```python
+  class MyAlgorithm(AlgorithmBase):
+      def __init__(self, alpha: float, beta: int):
+          pass
+  
+  MyAlgorithm.init_input_types()  # (float, int)
+  ```
+</ResponseField>
+
+<ResponseField name="get_inner_signature()" type="inspect.Signature">
+  Returns the signature of the `__init__` method.
+</ResponseField>
+
+#### Instance Methods
+
+<ResponseField name="save(path)" type="None">
+  Serializes the algorithm instance to disk.
+  
+  <ParamField path="path" type="Path" required>
+    Directory path where the algorithm will be saved.
+  </ParamField>
+  
+  Creates two files:
+  - `algorithm.yml` - Algorithm metadata and parameters
+  - `model.bin` - Serialized model using `dill`
+  
+  ```python
+  from pathlib import Path
+  
+  algorithm = LinearScaler(scale_factor=2.5)
+  algorithm.save(Path("./my_model"))
+  ```
+</ResponseField>
+
+<ResponseField name="load(path)" type="AlgorithmBase">
+  Deserializes an algorithm instance from disk.
+  
+  <ParamField path="path" type="Path" required>
+    Directory path where the algorithm was saved.
+  </ParamField>
+  
+  ```python
+  loaded = LinearScaler.load(Path("./my_model"))
+  ```
+</ResponseField>
+
+---
+
+### Pipeline
+
+`Pipeline` represents a sequential composition of algorithms. It automatically handles data flow between algorithms based on their type signatures.
+
+<ParamField path="Pipeline" type="class">
+  Represents a sequence of algorithms with automatic data routing.
+</ParamField>
+
+#### Constructor
+
+```python
+Pipeline(
+    algorithms: List[Algorithm],
+    input_types: List[Type[SemanticType]]
+)
+```
+
+<ParamField path="algorithms" type="List[Algorithm]" required>
+  Ordered list of algorithm instances to execute sequentially.
+</ParamField>
+
+<ParamField path="input_types" type="List[Type[SemanticType]]" required>
+  List of semantic types representing the pipeline's inputs.
+</ParamField>
+
+#### Instance Methods
+
+<ResponseField name="run(*inputs)" type="Any">
+  Executes the entire pipeline with the given inputs.
+  
+  <ParamField path="inputs" type="Any" required>
+    Input values matching the declared `input_types`.
+  </ParamField>
+  
+  The pipeline:
+  1. Maps inputs to their corresponding semantic types
+  2. For each algorithm, builds input arguments from available data
+  3. Executes the algorithm and stores its output
+  4. Returns the output of the final algorithm
+  
+  ```python
+  from autogoal.kb import Pipeline, Document
+  
+  pipeline = Pipeline(
+      algorithms=[tokenizer, stemmer, vectorizer],
+      input_types=[Document]
+  )
+  
+  result = pipeline.run("This is a test document.")
+  ```
+</ResponseField>
+
+<ResponseField name="send(msg, *args, **kwargs)" type="None">
+  Sends a message to all algorithms in the pipeline that implement the method.
+  
+  <ParamField path="msg" type="str" required>
+    Name of the method to call on each algorithm.
+  </ParamField>
+  
+  Useful for callbacks like logging or visualization:
+  
+  ```python
+  # Notify all steps about training progress
+  pipeline.send('on_epoch_end', epoch=10, loss=0.5)
+  ```
+</ResponseField>
+
+<ResponseField name="save_algorithms(path)" type="Set[str]">
+  Saves all algorithms in the pipeline to disk.
+  
+  <ParamField path="path" type="Path" required>
+    Directory where the pipeline will be saved.
+  </ParamField>
+  
+  Returns a set of contrib package names used by the algorithms.
+  
+  Creates:
+  - `algorithms.yml` - Pipeline metadata
+  - `algorithms/0/`, `algorithms/1/`, ... - Individual algorithm saves
+  
+  ```python
+  from pathlib import Path
+  
+  contribs = pipeline.save_algorithms(Path("./my_pipeline"))
+  print(contribs)  # {'sklearn', 'nltk'}
+  ```
+</ResponseField>
+
+<ResponseField name="load_algorithms(path)" type="Tuple[List[Algorithm], List[type]]">
+  Static method to load a pipeline from disk.
+  
+  <ParamField path="path" type="Path" required>
+    Directory where the pipeline was saved.
+  </ParamField>
+  
+  Returns a tuple of (algorithms, input_types) that can be used to reconstruct the pipeline.
+  
+  ```python
+  algorithms, input_types = Pipeline.load_algorithms(Path("./my_pipeline"))
+  pipeline = Pipeline(algorithms, input_types)
+  ```
+</ResponseField>
+
+<ResponseField name="serialize(use_dill=False)" type="bytes">
+  Serializes the pipeline to a byte string.
+  
+  <ParamField path="use_dill" type="bool" default="False">
+    Whether to use `dill` instead of `pickle`.
+  </ParamField>
+</ResponseField>
+
+<ResponseField name="deserialize(data, use_dill=False)" type="Pipeline">
+  Static method to deserialize a pipeline from bytes.
+  
+  <ParamField path="data" type="bytes" required>
+    Serialized pipeline data.
+  </ParamField>
+  
+  <ParamField path="use_dill" type="bool" default="False">
+    Whether to use `dill` instead of `pickle`.
+  </ParamField>
+</ResponseField>
+
+---
+
+### Supervised
+
+`Supervised[T]` is a special semantic type that represents supervised (labeled) data.
+
+<ParamField path="Supervised" type="SemanticType">
+  Represents a supervised version of some type T.
+</ParamField>
+
+#### Type Relationship
+
+`Supervised[T]` is considered a subclass of `T` for semantic purposes, but not vice versa:
+
+```python
+from autogoal.kb import Supervised, Vector
+
+issubclass(Supervised[Vector], Vector)       # True
+issubclass(Vector, Supervised[Vector])       # False
+
+issubclass(Supervised[Seq[Vector]], Seq[Vector])   # True
+issubclass(Seq[Vector], Supervised[Seq[Vector]])   # False
+```
+
+#### Usage in Algorithms
+
+Use `Supervised[T]` to indicate that an algorithm requires labeled training data:
+
+```python
+from autogoal.kb import AlgorithmBase, Supervised
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+
+class Classifier(AlgorithmBase):
+    def run(self, 
+            X: MatrixContinuousDense, 
+            y: Supervised[VectorCategorical]) -> VectorCategorical:
+        # Training with labeled data
+        model = train(X, y)
+        return model.predict(X)
+```
+
+<Note>
+Using `Supervised[T]` helps AutoGOAL distinguish between training algorithms (which need labels) and prediction/transformation algorithms (which don't).
+</Note>
+
+---
+
+## Utility Functions
+
+### build_input_args
+
+Builds the correct input mapping for an algorithm using provided type-to-value mappings.
+
+```python
+build_input_args(
+    algorithm: Algorithm,
+    values: Dict[type, Any]
+) -> Dict[str, Any]
+```
+
+<ParamField path="algorithm" type="Algorithm" required>
+  The algorithm class or instance to build arguments for.
+</ParamField>
+
+<ParamField path="values" type="Dict[type, Any]" required>
+  Mapping from semantic types to concrete values.
+</ParamField>
+
+**Returns**: Dictionary mapping parameter names to values.
+
+#### Example
+
+```python
+from autogoal.kb import AlgorithmBase, build_input_args
+
+class MyAlgorithm(AlgorithmBase):
+    def run(self, a: int, b: str) -> float:
+        return float(a + len(b))
+
+values = {str: "hello", float: 3.0, int: 42}
+args = build_input_args(MyAlgorithm, values)
+print(args)  # {'a': 42, 'b': 'hello'}
+
+# Works with instances too
+alg = MyAlgorithm()
+args = build_input_args(alg, values)
+print(args)  # {'a': 42, 'b': 'hello'}
+```
+
+<Info>
+The function uses `issubclass` for matching, so subtypes are automatically compatible.
+</Info>
+
+---
+
+### make_seq_algorithm
+
+Lifts an algorithm with input types T1, T2, ..., Tn to a meta-algorithm with types Seq[T1], Seq[T2], ..., Seq[Tn].
+
+```python
+make_seq_algorithm(
+    algorithm: Algorithm
+) -> Algorithm
+```
+
+<ParamField path="algorithm" type="Algorithm" required>
+  The algorithm class to lift to sequence processing.
+</ParamField>
+
+**Returns**: A new algorithm class that processes sequences element-wise.
+
+#### Example
+
+```python
+from autogoal.kb import AlgorithmBase, make_seq_algorithm, Seq
+
+class WordLengthCalculator(AlgorithmBase):
+    def __init__(self, multiplier: float = 1.0):
+        self.multiplier = multiplier
+    
+    def run(self, word: str) -> float:
+        return len(word) * self.multiplier
+
+# Create sequence version
+SeqWordLength = make_seq_algorithm(WordLengthCalculator)
+
+# Type signatures are automatically updated
+print(SeqWordLength.input_types())   # (Seq[str],)
+print(SeqWordLength.output_type())   # Seq[float]
+
+# Use it
+seq_alg = SeqWordLength(multiplier=2.0)
+result = seq_alg.run(["hello", "world"])
+print(result)  # [10.0, 10.0]
+```
+
+<Accordion title="How it works">
+  `make_seq_algorithm` dynamically creates a new class that:
+  
+  1. Wraps the original algorithm in an `inner` attribute
+  2. Transforms `Seq` inputs into individual elements
+  3. Calls the inner algorithm on each element
+  4. Collects results back into a `Seq`
+  5. Preserves the original constructor signature via `get_inner_signature()`
+  
+  The lifted algorithm is compatible with `build_input_args()` and pipeline construction.
+</Accordion>
+
+---
+
+## Pipeline Graph Construction
+
+### build_pipeline_graph
+
+Builds a graph representing all possible pipelines from a registry of algorithms.
+
+```python
+build_pipeline_graph(
+    input_types: List[type],
+    output_type: type,
+    registry: List[Algorithm],
+    max_list_depth: int = 3
+) -> PipelineSpace
+```
+
+<ParamField path="input_types" type="List[type]" required>
+  List of semantic types available as pipeline inputs.
+</ParamField>
+
+<ParamField path="output_type" type="type" required>
+  The desired semantic type for pipeline outputs.
+</ParamField>
+
+<ParamField path="registry" type="List[Algorithm]" required>
+  List of algorithm classes to consider for pipeline construction.
+</ParamField>
+
+<ParamField path="max_list_depth" type="int" default="3">
+  Maximum depth for automatically generating `Seq` versions of algorithms.
+</ParamField>
+
+**Returns**: A `PipelineSpace` object representing the search space.
+
+#### Example
+
+```python
+from autogoal.kb import build_pipeline_graph
+from autogoal.kb import MatrixContinuousDense, VectorCategorical, Supervised
+from autogoal_contrib import find_classes
+
+# Get all available algorithms
+registry = find_classes()
+
+# Build pipeline space for classification
+pipeline_space = build_pipeline_graph(
+    input_types=[MatrixContinuousDense, Supervised[VectorCategorical]],
+    output_type=VectorCategorical,
+    registry=registry,
+    max_list_depth=2
+)
+
+# Sample random pipelines
+for _ in range(5):
+    pipeline = pipeline_space.sample()
+    print([alg.__class__.__name__ for alg in pipeline.algorithms])
+```
+
+<Warning>
+Pipeline graph construction can be computationally expensive for large registries. Use `max_list_depth` wisely to control complexity.
+</Warning>
+
+#### How It Works
+
+1. **Expand Registry**: Automatically creates `Seq` versions of all algorithms up to `max_list_depth`
+2. **Build Graph**: Constructs a directed graph where:
+   - Nodes represent algorithm applications with guaranteed input/output types
+   - Edges connect compatible algorithms
+3. **Prune**: Removes nodes unreachable from start/end to ensure valid pipelines
+4. **Return**: Provides a `PipelineSpace` for sampling
+
+---
+
+## Advanced Classes
+
+### PipelineNode
+
+Represents a node in the pipeline graph, wrapping an algorithm with type information.
+
+```python
+PipelineNode(
+    algorithm: Algorithm,
+    input_types: Set[type],
+    output_types: Set[type],
+    registry: List[Algorithm] = None
+)
+```
+
+<Note>
+You typically don't create `PipelineNode` instances directly. They are used internally by `build_pipeline_graph()`.
+</Note>
+
+---
+
+### PipelineSpace
+
+Represents a search space of pipelines as a directed graph.
+
+```python
+class PipelineSpace(GraphSpace):
+    def __init__(self, graph: Graph, input_types: List[type])
+    
+    def sample(self, *args, **kwargs) -> Pipeline:
+        """Sample a random pipeline from the space."""
+    
+    def nodes(self) -> Set[Type[Algorithm]]:
+        """Returns all algorithm types in the space."""
+```
+
+#### Example
+
+```python
+# Check which algorithms are in the space
+print(f"Space contains {len(pipeline_space.nodes())} algorithm types")
+
+# Sample with a specific sampler
+from autogoal.sampling import RandomSampler
+sampler = RandomSampler(seed=42)
+pipeline = pipeline_space.sample(sampler=sampler)
+```
+
+---
+
+## Complete Example
+
+Here's a complete example showing how to define algorithms, build a pipeline, and execute it:
+
+```python
+from autogoal.kb import AlgorithmBase, Pipeline, Seq, Text, Vector
+from autogoal.grammar import Continuous, Categorical
+import numpy as np
+
+# Define custom algorithms
+class TextCleaner(AlgorithmBase):
+    def run(self, text: Text) -> Text:
+        return text.lower().strip()
+
+class WordTokenizer(AlgorithmBase):
+    def run(self, text: Text) -> Seq[Text]:
+        return text.split()
+
+class WordVectorizer(AlgorithmBase):
+    def __init__(self, 
+                 vocab_size: Categorical('small', 'medium', 'large')):
+        self.vocab_size = vocab_size
+        self.vocab_sizes = {'small': 100, 'medium': 1000, 'large': 10000}
+    
+    def run(self, words: Seq[Text]) -> Vector:
+        size = self.vocab_sizes[self.vocab_size]
+        # Simplified vectorization
+        return np.random.randn(size)
+
+# Create pipeline
+pipeline = Pipeline(
+    algorithms=[
+        TextCleaner(),
+        WordTokenizer(),
+        WordVectorizer(vocab_size='medium')
+    ],
+    input_types=[Text]
+)
+
+# Execute
+document = "  Hello World! This is a TEST.  "
+vector = pipeline.run(document)
+print(f"Output shape: {vector.shape}")
+
+# Introspection
+for i, alg in enumerate(pipeline.algorithms):
+    print(f"Step {i}: {alg.__class__.__name__}")
+    print(f"  Input: {alg.input_types()}")
+    print(f"  Output: {alg.output_type()}")
+```
+
+---
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Semantic Types" icon="tags" href="/api/kb/semantic-types">
+    Learn about the type system used for algorithm composition
+  </Card>
+  <Card title="Data Types" icon="database" href="/api/kb/data-types">
+    Explore built-in semantic data types
+  </Card>
+  <Card title="Custom Algorithms Guide" icon="wrench" href="/guides/custom-algorithms">
+    Step-by-step guide to creating custom algorithms
+  </Card>
+  <Card title="Grammar API" icon="network-wired" href="/api/grammar/overview">
+    Understand the grammar system for defining search spaces
+  </Card>
+</CardGroup>

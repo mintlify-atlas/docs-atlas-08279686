@@ -1,0 +1,648 @@
+---
+title: Search Loggers
+description: Logger classes for monitoring and tracking search progress in AutoGOAL
+---
+
+Loggers provide visibility into the search process, tracking solution generation, evaluation, and optimization progress. AutoGOAL includes several built-in logger implementations for different use cases.
+
+## Logger
+
+Base logger interface that defines the logging API. All other loggers inherit from this class.
+
+**Source**: `autogoal/search/_base.py:312`
+
+### Methods
+
+All logger methods have empty default implementations. Override the methods you need in custom loggers.
+
+#### begin
+
+```python
+begin(generations: int, pop_size: int)
+```
+
+Called once at the start of search.
+
+<ParamField path="generations" type="int">
+  Maximum number of generations to run
+</ParamField>
+
+<ParamField path="pop_size" type="int">
+  Number of solutions per generation
+</ParamField>
+
+#### start_generation
+
+```python
+start_generation(
+    generations: int,
+    best_solutions: list,
+    best_fns: list
+)
+```
+
+Called at the beginning of each generation.
+
+<ParamField path="generations" type="int">
+  Number of generations remaining
+</ParamField>
+
+<ParamField path="best_solutions" type="list">
+  Current list of best solutions found
+</ParamField>
+
+<ParamField path="best_fns" type="list">
+  Fitness values of current best solutions
+</ParamField>
+
+#### sample_solution
+
+```python
+sample_solution(solution)
+```
+
+Called when a new solution is generated, before evaluation.
+
+<ParamField path="solution" type="object">
+  The generated pipeline or solution
+</ParamField>
+
+#### eval_solution
+
+```python
+eval_solution(solution, fitness: tuple)
+```
+
+Called after a solution is evaluated.
+
+<ParamField path="solution" type="object">
+  The evaluated pipeline
+</ParamField>
+
+<ParamField path="fitness" type="tuple">
+  Fitness values returned by fitness function
+</ParamField>
+
+#### update_best
+
+```python
+update_best(
+    solution,
+    fn: tuple,
+    new_best_solutions: list,
+    best_solutions: list,
+    new_best_fns: list,
+    best_fns: list,
+    new_dominated_solutions: list
+)
+```
+
+Called when a new best solution is found.
+
+<ParamField path="solution" type="object">
+  The new best solution
+</ParamField>
+
+<ParamField path="fn" type="tuple">
+  Fitness of the new best solution
+</ParamField>
+
+<ParamField path="new_best_solutions" type="list">
+  Updated list of all best solutions
+</ParamField>
+
+<ParamField path="best_solutions" type="list">
+  Previous list of best solutions
+</ParamField>
+
+<ParamField path="new_best_fns" type="list">
+  Fitness values of updated best solutions
+</ParamField>
+
+<ParamField path="best_fns" type="list">
+  Previous fitness values
+</ParamField>
+
+<ParamField path="new_dominated_solutions" type="list">
+  Solutions that became dominated by the new solution
+</ParamField>
+
+#### error
+
+```python
+error(e: Exception, solution)
+```
+
+Called when pipeline evaluation fails.
+
+<ParamField path="e" type="Exception">
+  The exception that was raised
+</ParamField>
+
+<ParamField path="solution" type="object">
+  The pipeline that failed evaluation
+</ParamField>
+
+#### finish_generation
+
+```python
+finish_generation(fns: list)
+```
+
+Called at the end of each generation.
+
+<ParamField path="fns" type="list">
+  Fitness values of all solutions in the generation
+</ParamField>
+
+#### end
+
+```python
+end(best_solutions: list, best_fns: list)
+```
+
+Called once when search completes.
+
+<ParamField path="best_solutions" type="list">
+  Final list of best solutions found
+</ParamField>
+
+<ParamField path="best_fns" type="list">
+  Final fitness values
+</ParamField>
+
+### Example: Custom Logger
+
+```python
+from autogoal.search import Logger
+import csv
+
+class CSVLogger(Logger):
+    def __init__(self, filename):
+        self.filename = filename
+        self.file = None
+        self.writer = None
+        self.generation = 0
+    
+    def begin(self, generations, pop_size):
+        self.file = open(self.filename, 'w', newline='')
+        self.writer = csv.writer(self.file)
+        self.writer.writerow(['generation', 'solution', 'fitness'])
+    
+    def eval_solution(self, solution, fitness):
+        self.writer.writerow([self.generation, repr(solution), fitness])
+    
+    def start_generation(self, generations, best_solutions, best_fns):
+        self.generation += 1
+    
+    def end(self, best_solutions, best_fns):
+        self.file.close()
+
+# Use custom logger
+from autogoal.search import RandomSearch
+
+search = RandomSearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    logger=CSVLogger('search_log.csv')
+)
+
+search.run(generations=50)
+```
+
+---
+
+## ConsoleLogger
+
+Simple text-based logger that prints colored output to the terminal. Good for basic monitoring and debugging.
+
+**Source**: `autogoal/search/_base.py:347`
+
+### Features
+
+- Color-coded output using `termcolor`
+- Progress information with elapsed and remaining time
+- Best solution updates
+- Error reporting
+
+### Color Scheme
+
+| Color | Usage |
+|-------|-------|
+| Gray | Normal text |
+| White (bold) | Emphasis (generation start, totals) |
+| Green | Success (new best solutions) |
+| Blue | Primary info (metrics, times) |
+| Red | Errors |
+
+### Example
+
+```python
+from autogoal.search import PESearch, ConsoleLogger
+
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    pop_size=30,
+    logger=ConsoleLogger()
+)
+
+best, scores = search.run(generations=50)
+```
+
+### Sample Output
+
+```
+Starting search: generations=50
+New generation started
+best_0=Pipeline(...) with score: (0.8523,)
+generations=50 elapsed=0:00:12 remaining=0:10:00
+Evaluating pipeline:
+Pipeline(...)
+Fitness=0.845
+New best: Pipeline(...) with score (0.856,)
+0 previously optimal solutions are now sub-optimal.
+1 optimal solutions so far. Improved: [(0.856,)]. Previous [(0.8523,)]
+...
+```
+
+---
+
+## RichLogger
+
+Beautiful formatted logger using the `rich` library with progress bars, panels, and styled output. Recommended for production use.
+
+**Source**: `autogoal/search/_base.py:484`
+
+### Features
+
+- Dual progress bars (per-generation and overall)
+- Styled panels for important events
+- Emoji indicators for status
+- Horizontal rules for visual separation
+- Rich formatting (colors, bold, etc.)
+
+### Example
+
+```python
+from autogoal.search import NSPESearch, RichLogger
+
+search = NSPESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=multi_objective_fitness,
+    maximize=(True, False, False),
+    pop_size=50,
+    logger=RichLogger()
+)
+
+pareto_front, scores = search.run(generations=100)
+```
+
+### Visual Features
+
+<CodeGroup>
+```python Progress Bars
+Generation ━━━━━━━━━━━━━━━━━━━━━━━━ 30/50  60%
+Overall    ━━━━━━━━━━━━━━━━━━━━━━━━ 1500/2500  60%
+```
+
+```python Best Solution Panel
+╭─────────────────────────────────────────────╮
+│ 🔥 New Best found Pipeline(...) 0.923       │
+╰─────────────────────────────────────────────╯
+```
+
+```python Fitness Panel
+╭─────────────────────────────────────────────╮
+│ 📈 Fitness=[blue](0.856, 125.3, 2048000)   │
+╰─────────────────────────────────────────────╯
+```
+</CodeGroup>
+
+---
+
+## ProgressLogger
+
+Minimal progress logger using `enlighten` library with simple progress counters. Lightweight alternative to RichLogger.
+
+**Source**: `autogoal/search/_base.py:449`
+
+### Features
+
+- Two progress counters (generation and total)
+- Live-updating best score in counter description
+- Minimal terminal output
+- Low overhead
+
+### Example
+
+```python
+from autogoal.search import PESearch, ProgressLogger
+
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    pop_size=40,
+    logger=ProgressLogger()
+)
+
+best, scores = search.run(generations=50)
+```
+
+### Sample Output
+
+```
+Current Gen  30/40 evals [████████████████░░░░] 75%
+Best: 0.892  1200/2000 evals [████████████░░░░░░░] 60%
+```
+
+---
+
+## MemoryLogger
+
+Lightweight logger that stores fitness statistics in memory for post-search analysis. No console output.
+
+**Source**: `autogoal/search/_base.py:620`
+
+### Attributes
+
+<ResponseField name="generation_best_fn" type="list[float]">
+  Best fitness value at the end of each generation. Length equals generations + 1.
+</ResponseField>
+
+<ResponseField name="generation_mean_fn" type="list[float]">
+  Mean fitness across all solutions in each generation. Length equals generations.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```python Basic Usage
+from autogoal.search import RandomSearch, MemoryLogger
+
+memory_logger = MemoryLogger()
+
+search = RandomSearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    pop_size=30,
+    logger=memory_logger
+)
+
+best, scores = search.run(generations=50)
+
+# Access statistics
+print(f"Final best: {memory_logger.generation_best_fn[-1]}")
+print(f"Mean fitness over time: {memory_logger.generation_mean_fn}")
+```
+
+```python Plotting Results
+import matplotlib.pyplot as plt
+from autogoal.search import PESearch, MemoryLogger
+
+memory_logger = MemoryLogger()
+
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    pop_size=40,
+    logger=memory_logger
+)
+
+best, scores = search.run(generations=100)
+
+# Plot convergence
+plt.figure(figsize=(10, 6))
+plt.plot(memory_logger.generation_best_fn, label='Best')
+plt.plot(memory_logger.generation_mean_fn, label='Mean')
+plt.xlabel('Generation')
+plt.ylabel('Fitness')
+plt.title('Search Convergence')
+plt.legend()
+plt.savefig('convergence.png')
+```
+</CodeGroup>
+
+---
+
+## JsonLogger
+
+Logger that exports complete search history to JSON files for detailed analysis and reproducibility.
+
+**Source**: `autogoal/search/_base.py:550`
+
+### Constructor
+
+```python
+JsonLogger(log_file_name: str)
+```
+
+<ParamField path="log_file_name" type="str" required>
+  Path to JSON file where search log will be written. File is created/overwritten on initialization.
+</ParamField>
+
+### Log Structure
+
+The JSON file contains a list of log entries, each with different types:
+
+<AccordionGroup>
+  <Accordion title="Generation Start Entry">
+    ```json
+    {
+      "generations left": 47,
+      "best_fns": [(0.8523, 145.2)]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Solution Evaluation Entry">
+    ```json
+    {
+      "pipeline": "Pipeline(preprocessor=StandardScaler(), classifier=RandomForest())",
+      "multiline-pipeline": "Pipeline(\n  preprocessor=StandardScaler(),\n  classifier=RandomForest()\n)",
+      "fitness": (0.845, 132.5)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="New Best Entry">
+    ```json
+    {
+      "new-best": {
+        "solution": "Pipeline(...)",
+        "fitness": (0.892, 128.3)
+      },
+      "pareto-front": [
+        {
+          "fitness_0": (0.892, 128.3),
+          "solution_0": "Pipeline(...)"
+        },
+        {
+          "fitness_1": (0.887, 115.2),
+          "solution_1": "Pipeline(...)"
+        }
+      ]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Search End Entry">
+    ```json
+    {
+      "Finished run": true,
+      "pareto-front": [...],
+      "best-fitness": [(0.923, 112.8)]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Example
+
+<CodeGroup>
+```python Basic Usage
+from autogoal.search import NSPESearch, JsonLogger
+
+search = NSPESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=multi_objective_fitness,
+    maximize=(True, False),
+    pop_size=50,
+    logger=JsonLogger('search_history.json')
+)
+
+pareto_front, scores = search.run(generations=100)
+```
+
+```python Analysis Script
+import json
+import numpy as np
+
+# Load search history
+with open('search_history.json', 'r') as f:
+    history = json.load(f)
+
+# Extract all evaluated fitnesses
+fitnesses = [
+    entry['fitness'] 
+    for entry in history 
+    if 'fitness' in entry
+]
+
+# Analyze
+print(f"Total evaluations: {len(fitnesses)}")
+print(f"Best accuracy: {max(f[0] for f in fitnesses):.3f}")
+print(f"Best time: {min(f[1] for f in fitnesses):.2f}ms")
+
+# Find Pareto front in final result
+final_entry = [e for e in history if 'Finished run' in e][-1]
+pareto_front = final_entry['pareto-front']
+print(f"Pareto front size: {len(pareto_front)}")
+```
+</CodeGroup>
+
+### Use Cases
+
+- **Reproducibility**: Complete record of search process
+- **Analysis**: Detailed examination of search behavior
+- **Debugging**: Identify evaluation failures or anomalies
+- **Visualization**: Create custom plots and reports
+- **Comparison**: Compare different search configurations
+
+---
+
+## Multiple Loggers
+
+Combine multiple loggers to get benefits of each. Pass a list of loggers to the search algorithm:
+
+```python
+from autogoal.search import PESearch, RichLogger, MemoryLogger, JsonLogger
+
+# Use rich display + memory statistics + JSON export
+loggers = [
+    RichLogger(),
+    MemoryLogger(),
+    JsonLogger('detailed_log.json')
+]
+
+search = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate,
+    pop_size=50,
+    logger=loggers  # List of loggers
+)
+
+best, scores = search.run(generations=100)
+
+# Access memory logger for statistics
+memory_logger = loggers[1]
+print(f"Final best: {memory_logger.generation_best_fn[-1]}")
+```
+
+<Info>
+  When a list of loggers is provided, AutoGOAL automatically wraps them in a `MultiLogger` that calls each logger's methods in sequence.
+</Info>
+
+## Logger Comparison
+
+| Logger | Output | Overhead | Use Case |
+|--------|--------|----------|----------|
+| Logger | None | Minimal | Production (no logging) |
+| ConsoleLogger | Terminal (simple) | Low | Debugging, quick tests |
+| ProgressLogger | Terminal (counters) | Low | Long-running, minimal output |
+| RichLogger | Terminal (styled) | Medium | Interactive, development |
+| MemoryLogger | None | Minimal | Statistical analysis |
+| JsonLogger | File | Medium | Reproducibility, analysis |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Development & Debugging">
+    Use `RichLogger` for beautiful, informative output:
+    ```python
+    logger = RichLogger()
+    ```
+  </Accordion>
+  
+  <Accordion title="Production Runs">
+    Combine `ProgressLogger` for monitoring with `JsonLogger` for records:
+    ```python
+    logger = [ProgressLogger(), JsonLogger('run.json')]
+    ```
+  </Accordion>
+  
+  <Accordion title="Scientific Experiments">
+    Use `MemoryLogger` for statistics with `JsonLogger` for reproducibility:
+    ```python
+    logger = [MemoryLogger(), JsonLogger('experiment.json')]
+    ```
+  </Accordion>
+  
+  <Accordion title="Silent Execution">
+    Use default `Logger()` for no output:
+    ```python
+    logger = Logger()  # or just omit logger parameter
+    ```
+  </Accordion>
+  
+  <Accordion title="Custom Requirements">
+    Inherit from `Logger` and override needed methods:
+    ```python
+    class MyLogger(Logger):
+        def update_best(self, solution, fn, *args):
+            # Custom logic
+            pass
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Search Algorithms" icon="brain" href="./algorithms">
+    Learn about available search algorithms
+  </Card>
+  <Card title="Search Overview" icon="book" href="./overview">
+    Return to search module overview
+  </Card>
+</CardGroup>

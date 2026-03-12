@@ -1,80 +1,228 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick Start"
+description: "Get started with AutoGOAL in 5 minutes"
+icon: "rocket"
 ---
 
-## Get started in three steps
+## Your First AutoGOAL Pipeline
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through creating your first automated machine learning pipeline with AutoGOAL. In just a few minutes, you'll train a classifier on a real dataset.
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Install AutoGOAL">
+    First, install AutoGOAL using pip:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    pip install autogoal
+    ```
 
-### Step 2: Deploy your changes
+    For full machine learning support, install the contrib dependencies:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    pip install autogoal[contrib]
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <Note>
+    See the [Installation Guide](/installation) for more details on dependencies and Docker setup.
+    </Note>
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Import Required Modules">
+    Import the AutoML class and semantic types:
 
-### Step 3: Go live
+    ```python
+    from autogoal.datasets import cars
+    from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+    from autogoal.ml import AutoML
+    ```
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Load a Dataset">
+    AutoGOAL includes several built-in datasets. Let's use the Cars dataset:
 
-## Next steps
+    ```python
+    # Load the Cars classification dataset
+    X, y = cars.load()
 
-Now that you have your docs running, explore these key features:
+    print(f"Dataset shape: {X.shape}")
+    print(f"Number of samples: {len(y)}")
+    ```
 
-<CardGroup cols={2}>
+    The Cars dataset contains vehicle characteristics and their classification.
+  </Step>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Step title="Create and Train AutoML">
+    Now create an AutoML instance and let it find the best pipeline:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    ```python
+    # Create AutoML instance with input/output types
+    automl = AutoML(
+        input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+        output=VectorCategorical
+    )
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    # Search for the best pipeline (runs for ~5 minutes by default)
+    automl.fit(X, y)
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+    # View the results
+    print("Best pipeline:", automl.best_pipeline_)
+    print("Best score:", automl.best_score_)
+    ```
 
-</CardGroup>
+    <Note>
+    The search runs for approximately 5 minutes by default. You can adjust this using the `search_kwargs` parameter.
+    </Note>
+  </Step>
+</Steps>
+
+## Complete Example
+
+Here's the complete code in one block:
+
+```python
+from autogoal.datasets import cars
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+
+# Load dataset
+X, y = cars.load()
+
+# Create and configure AutoML
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical
+)
+
+# Train and search for best pipeline
+automl.fit(X, y)
+
+# Print results
+print("Best pipeline:", automl.best_pipeline_)
+print("Best score:", automl.best_score_)
+```
+
+<Tip>
+Copy this code and run it in your Python environment to see AutoGOAL in action!
+</Tip>
+
+## Using Your Own Data
+
+To use AutoGOAL with your own data:
+
+```python
+import numpy as np
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+
+# Your data as numpy arrays
+X = np.array([...])  # Features
+y = np.array([...])  # Labels
+
+# Create AutoML with appropriate types
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical
+)
+
+# Fit and predict
+automl.fit(X, y)
+predictions = automl.predict(X)
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Make sure to choose the correct semantic types for your data. See [Semantic Types](/concepts/semantic-types) for more information.
 </Note>
+
+## Adding Logging
+
+Monitor the search progress with built-in loggers:
+
+```python
+from autogoal.ml import AutoML
+from autogoal.search import ConsoleLogger
+from autogoal.datasets import cars
+
+X, y = cars.load()
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical
+)
+
+# Add a logger to see progress
+automl.fit(X, y, logger=ConsoleLogger())
+```
+
+For more beautiful output, use `RichLogger`:
+
+```python
+from autogoal.search import RichLogger
+
+automl.fit(X, y, logger=RichLogger())
+```
+
+## Saving and Loading Models
+
+Save your trained model for later use:
+
+```python
+# Save the model
+automl.folder_save("my_model")
+
+# Load it later
+from autogoal.ml import AutoML
+loaded_automl = AutoML.folder_load("my_model")
+
+# Make predictions
+predictions = loaded_automl.predict(X_new)
+```
+
+## Customizing the Search
+
+Control how long AutoGOAL searches and what resources it uses:
+
+```python
+from autogoal.ml import AutoML
+from autogoal.utils import Min, Gb
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=50,  # Number of pipelines to try
+    search_kwargs=dict(
+        search_timeout=10 * Min,      # Total search time
+        evaluation_timeout=5 * Min,   # Max time per pipeline
+        memory_limit=4 * Gb,          # Memory limit per pipeline
+    )
+)
+
+automl.fit(X, y)
+```
+
+## What Happens Behind the Scenes?
+
+When you call `automl.fit()`, AutoGOAL:
+
+1. **Discovers** available machine learning algorithms from contrib libraries
+2. **Generates** a search space of possible pipelines based on semantic types
+3. **Samples** pipeline candidates using probabilistic grammatical evolution
+4. **Evaluates** each pipeline with cross-validation
+5. **Learns** from successful pipelines to guide future sampling
+6. **Returns** the best performing pipeline
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Learn about different installation methods and dependencies
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Understand how AutoGOAL works under the hood
+  </Card>
+  <Card title="AutoML Guide" icon="brain" href="/automl/overview">
+    Deep dive into AutoML features and configuration
+  </Card>
+  <Card title="CLI Usage" icon="terminal" href="/cli/overview">
+    Use AutoGOAL from the command line
+  </Card>
+</CardGroup>

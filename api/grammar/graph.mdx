@@ -1,0 +1,724 @@
+---
+title: 'Graph Grammar API'
+description: 'API reference for graph grammars and graph-based search spaces'
+---
+
+## Core Classes
+
+### GraphGrammar
+
+```python
+class GraphGrammar(Grammar)
+```
+
+Represents a graph grammar for sampling directed acyclic graphs (DAGs).
+
+Graph grammars define search spaces as graphs where nodes represent components and edges represent dependencies. Production rules specify how placeholder nodes can be expanded into more complex structures.
+
+<Info>
+Graph grammars are particularly useful for neural architecture search, pipeline construction, and workflow generation.
+</Info>
+
+#### Constructor
+
+```python
+__init__(
+    start,
+    *,
+    initializer=None,
+    non_terminals=None
+)
+```
+
+<ParamField path="start" type="str | Node | GraphPattern | Graph" required>
+  The initial graph structure. Can be:
+  - A string (creates a single node)
+  - A `Node` instance
+  - A `GraphPattern` (Path, Block, etc.)
+  - A `Graph` instance
+</ParamField>
+
+<ParamField path="initializer" type="callable" default="None">
+  Function to initialize node objects. Signature: `initializer(cls, sampler=None) -> instance`.
+  If None, uses default initializer that calls `cls()`.
+</ParamField>
+
+<ParamField path="non_terminals" type="list" default="None">
+  List of node types that are non-terminals. Production rules matching these will be prioritized during sampling.
+</ParamField>
+
+#### Methods
+
+<Accordion title="add()">
+```python
+add(
+    pattern,
+    replacement: GraphPattern,
+    *,
+    initializer=None,
+    kwargs=None
+)
+```
+
+Adds a production rule to the grammar.
+
+A production rule specifies that when a node matching `pattern` is found, it can be replaced by the graph structure defined in `replacement`.
+
+<ParamField path="pattern" type="str | type" required>
+  The pattern to match. Can be:
+  - A string (name of a node class)
+  - A type/class to match nodes of that type
+</ParamField>
+
+<ParamField path="replacement" type="GraphPattern" required>
+  The graph pattern to replace matched nodes with. Can be:
+  - `Node(cls)` - single node
+  - `Path(cls1, cls2, ...)` - sequential chain
+  - `Block(cls1, cls2, ...)` - parallel nodes
+  - `Epsilon()` - remove node (connect inputs directly to outputs)
+</ParamField>
+
+<ParamField path="initializer" type="callable" default="None">
+  Custom initializer for nodes created by this rule. Overrides the grammar's default initializer.
+</ParamField>
+
+<ParamField path="kwargs" type="dict" default="None">
+  Keyword arguments to pass to node constructors. Creates an initializer that calls `cls(**kwargs)`.
+</ParamField>
+
+**Example**:
+```python
+from autogoal.grammar import GraphGrammar, Path, Block, Node
+
+# Create grammar starting with "Input"
+grammar = GraphGrammar(start="Input")
+
+# Expand "Input" into a sequence
+grammar.add("Input", Path("Normalize", "Process"))
+
+# Expand "Process" into parallel operations
+grammar.add("Process", Block("Linear", "Conv", "Pool"))
+
+# Replace specific nodes with single nodes
+grammar.add("Linear", Node("Dense"))
+```
+</Accordion>
+
+<Accordion title="sample()">
+```python
+sample(*, max_iterations: int = 100, sampler: Sampler = None)
+```
+
+Samples a random graph by applying production rules.
+
+<ParamField path="max_iterations" type="int" default="100">
+  Maximum number of production rule applications
+</ParamField>
+
+<ParamField path="sampler" type="Sampler" default="None">
+  Optional sampler for reproducible results
+</ParamField>
+
+**Returns**: A `Graph` instance representing the sampled structure
+
+**Example**:
+```python
+from autogoal.sampling import Sampler
+
+grammar = GraphGrammar(start="Input")
+grammar.add("Input", Path("Layer1", "Layer2"))
+
+# Sample with custom settings
+sampler = Sampler(random_state=42)
+graph = grammar.sample(sampler=sampler, max_iterations=50)
+
+# Inspect the graph
+print(f"Nodes: {list(graph.nodes)}")
+print(f"Edges: {list(graph.edges)}")
+```
+</Accordion>
+
+#### Example Usage
+
+<CodeGroup>
+```python Sequential Pipeline
+from autogoal.grammar import GraphGrammar, Path, Node
+
+# Define the grammar
+grammar = GraphGrammar(start="Pipeline")
+
+# Create a sequential pipeline
+grammar.add("Pipeline", Path("Preprocess", "Model", "Postprocess"))
+grammar.add("Preprocess", Node("Normalizer"))
+grammar.add("Model", Node("Classifier"))
+grammar.add("Postprocess", Node("Thresholder"))
+
+# Sample generates: Normalizer -> Classifier -> Thresholder
+graph = grammar.sample()
+```
+
+```python Parallel Processing
+from autogoal.grammar import GraphGrammar, Block, Node
+
+grammar = GraphGrammar(start="Ensemble")
+
+# All models receive same input
+grammar.add("Ensemble", Block("Model1", "Model2", "Model3"))
+
+graph = grammar.sample()
+# Creates three parallel branches
+```
+
+```python Neural Architecture
+from autogoal.grammar import GraphGrammar, Path, Block, Node
+
+grammar = GraphGrammar(start="Network", non_terminals=["Layer"])
+
+# Initial structure
+grammar.add("Network", Path("Layer", "Layer", "Output"))
+
+# Layer can expand into different architectures
+grammar.add("Layer", Node("Conv2D"))
+grammar.add("Layer", Path("Conv2D", "BatchNorm", "ReLU"))
+grammar.add("Layer", Block("Conv2D", "MaxPool"))
+
+# Terminal nodes
+grammar.add("Output", Node("Dense"))
+
+graph = grammar.sample()
+```
+</CodeGroup>
+
+---
+
+## Graph Patterns
+
+### Node
+
+```python
+class Node(GraphPattern)
+```
+
+Represents a single node in a graph.
+
+#### Constructor
+
+```python
+__init__(cls: str | type)
+```
+
+<ParamField path="cls" type="str | type" required>
+  The class of the node. Can be a string (class name) or a type.
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.grammar import Node
+
+# Create patterns
+node1 = Node("MyClass")  # Reference by name
+node2 = Node(MyClass)    # Reference by type
+
+# Use in grammar
+grammar.add("Input", Node("Preprocessor"))
+```
+
+---
+
+### Path
+
+```python
+class Path(GraphPattern)
+```
+
+Represents a sequential chain of nodes connected in order.
+
+#### Constructor
+
+```python
+__init__(*items: str | type)
+```
+
+<ParamField path="items" type="*args" required>
+  Variable number of node classes to chain sequentially
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.grammar import Path
+
+# Creates: A -> B -> C
+path = Path("A", "B", "C")
+
+grammar.add("Start", Path("Tokenize", "Embed", "Encode"))
+```
+
+**Graph Structure**:
+```
+Input -> Tokenize -> Embed -> Encode -> Output
+```
+
+---
+
+### Block
+
+```python
+class Block(GraphPattern)
+```
+
+Represents parallel nodes that all receive the same inputs and send to the same outputs.
+
+#### Constructor
+
+```python
+__init__(*items: str | type)
+```
+
+<ParamField path="items" type="*args" required>
+  Variable number of node classes to create in parallel
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.grammar import Block
+
+# Creates parallel branches
+block = Block("A", "B", "C")
+
+grammar.add("Ensemble", Block("SVM", "RandomForest", "NeuralNet"))
+```
+
+**Graph Structure**:
+```
+        /--> A -->\
+ Input --|--> B -->|--> Output
+        \--> C -->/
+```
+
+---
+
+### Epsilon
+
+```python
+class Epsilon(GraphPattern)
+```
+
+Represents an empty expansion that removes a node and connects its inputs directly to its outputs.
+
+Useful for creating optional components or skip connections.
+
+#### Example
+
+```python
+from autogoal.grammar import Epsilon, Node
+
+# Make preprocessing optional
+grammar.add("Preprocess", Node("Normalizer"))
+grammar.add("Preprocess", Epsilon())  # Or skip it
+
+graph = grammar.sample()
+# Sometimes includes Normalizer, sometimes doesn't
+```
+
+---
+
+## Graph Class
+
+### Graph
+
+```python
+class Graph(nx.DiGraph)
+```
+
+Represents a directed graph (extends NetworkX DiGraph).
+
+Graphs in AutoGOAL are NetworkX directed graphs with additional methods for topological processing.
+
+#### Methods
+
+<Accordion title="build_order()">
+```python
+build_order() -> Iterator[Tuple[node, List[node]]]
+```
+
+Returns nodes in topological order with their incoming neighbors.
+
+Yields tuples of `(node, in_nodes)` where `in_nodes` is a list of nodes with edges pointing to `node`.
+
+**Returns**: Iterator of `(node, incoming_nodes)` tuples
+
+**Example**:
+```python
+for node, in_nodes in graph.build_order():
+    print(f"{node} depends on {in_nodes}")
+    # Process node after its dependencies
+```
+</Accordion>
+
+<Accordion title="apply()">
+```python
+apply(function: callable) -> list
+```
+
+Applies a function to all nodes in topological order.
+
+The function receives three arguments:
+- `node`: Current node instance
+- `in_nodes`: List of incoming node instances
+- `in_values`: List of values returned by previous function calls on incoming nodes
+
+<ParamField path="function" type="callable" required>
+  Function with signature: `function(node, in_nodes, in_values) -> value`
+</ParamField>
+
+**Returns**: List of values from nodes with no outgoing edges (terminal nodes)
+
+**Example**:
+```python
+def execute(node, in_nodes, in_values):
+    # in_values contains results from incoming nodes
+    if not in_values:
+        return node.process(input_data)
+    else:
+        # Combine inputs from multiple sources
+        combined = combine(in_values)
+        return node.process(combined)
+
+results = graph.apply(execute)
+```
+</Accordion>
+
+<Accordion title="contains_any()">
+```python
+contains_any(*items) -> bool
+```
+
+Checks if the graph contains any of the given items as nodes.
+
+<ParamField path="items" type="*args" required>
+  Variable number of items to check for
+</ParamField>
+
+**Returns**: True if any item is a node in the graph
+
+**Example**:
+```python
+if graph.contains_any(InputNode, StartNode):
+    print("Graph has input node")
+```
+</Accordion>
+
+#### Example Usage
+
+```python
+from autogoal.grammar import Graph
+
+# Create a graph
+graph = Graph()
+
+# Add nodes (can be any Python objects)
+node_a = "A"
+node_b = "B"
+node_c = "C"
+
+graph.add_node(node_a)
+graph.add_node(node_b)
+graph.add_node(node_c)
+
+# Add edges
+graph.add_edge(node_a, node_b)
+graph.add_edge(node_b, node_c)
+
+# Process in order
+for node, deps in graph.build_order():
+    print(f"Processing {node} after {deps}")
+# Output:
+# Processing A after []
+# Processing B after ['A']
+# Processing C after ['B']
+```
+
+---
+
+## GraphSpace
+
+### GraphSpace
+
+```python
+class GraphSpace(Grammar)
+```
+
+Represents a search space defined by a predefined graph structure.
+
+Unlike `GraphGrammar` which uses production rules to build graphs, `GraphSpace` samples paths through an existing graph.
+
+<Info>
+Use `GraphSpace` when you have a fixed graph structure and want to sample different paths through it.
+</Info>
+
+#### Constructor
+
+```python
+__init__(graph: Graph, initializer=None)
+```
+
+<ParamField path="graph" type="Graph" required>
+  A graph defining the search space. Nodes represent components, edges represent valid transitions.
+</ParamField>
+
+<ParamField path="initializer" type="callable" default="None">
+  Function to initialize node instances. Signature: `initializer(node, sampler=None) -> instance`
+</ParamField>
+
+#### Class Attributes
+
+<ResponseField name="Start" type="object">
+  Special start marker for paths
+</ResponseField>
+
+<ResponseField name="End" type="object">
+  Special end marker for paths
+</ResponseField>
+
+#### Methods
+
+<Accordion title="sample()">
+```python
+sample(*, max_iterations: int = 100, sampler: Sampler = None)
+```
+
+Samples a random path through the graph.
+
+Starts from `GraphSpace.Start` and follows edges until reaching `GraphSpace.End`, randomly choosing at each branch point.
+
+<ParamField path="max_iterations" type="int" default="100">
+  Maximum path length to prevent infinite loops
+</ParamField>
+
+<ParamField path="sampler" type="Sampler" default="None">
+  Optional sampler for reproducible results
+</ParamField>
+
+**Returns**: List of initialized node instances representing the path
+
+**Raises**: `ValueError` if the graph is disconnected or max_iterations is exceeded
+</Accordion>
+
+#### Example Usage
+
+```python
+from autogoal.grammar import GraphSpace, Graph
+
+# Define a graph with multiple paths
+graph = Graph()
+
+# Add nodes (class references)
+graph.add_node(GraphSpace.Start)
+graph.add_node(Tokenizer)
+graph.add_node(Stemmer)
+graph.add_node(Lemmatizer)
+graph.add_node(Vectorizer)
+graph.add_node(GraphSpace.End)
+
+# Add edges (valid transitions)
+graph.add_edge(GraphSpace.Start, Tokenizer)
+graph.add_edge(Tokenizer, Stemmer)
+graph.add_edge(Tokenizer, Lemmatizer)
+graph.add_edge(Stemmer, Vectorizer)
+graph.add_edge(Lemmatizer, Vectorizer)
+graph.add_edge(Vectorizer, GraphSpace.End)
+
+# Create space and sample paths
+space = GraphSpace(graph, initializer=lambda cls: cls())
+
+# Each sample is a different path through the graph
+path1 = space.sample()  # e.g., [Tokenizer, Stemmer, Vectorizer]
+path2 = space.sample()  # e.g., [Tokenizer, Lemmatizer, Vectorizer]
+```
+
+---
+
+## Advanced Usage
+
+### Custom Initializers
+
+Control how nodes are instantiated:
+
+<CodeGroup>
+```python CFG Initializer
+from autogoal.grammar import generate_cfg, GraphGrammar, Path
+
+class Layer:
+    def __init__(self, units: DiscreteValue(10, 100)):
+        self.units = units
+
+def cfg_initializer(cls, sampler=None):
+    """Initialize using CFG for complex parameter spaces"""
+    grammar = generate_cfg(cls)
+    return grammar.sample(sampler=sampler)
+
+grammar = GraphGrammar(start="Network", initializer=cfg_initializer)
+grammar.add("Network", Path("Layer", "Layer"))
+
+graph = grammar.sample()
+# Each Layer node has randomly sampled units
+```
+
+```python Kwargs Initializer
+grammar = GraphGrammar(start="Network")
+
+# Pass specific kwargs to nodes
+grammar.add(
+    "Input",
+    Node("Dense"),
+    kwargs={"units": 128, "activation": "relu"}
+)
+
+graph = grammar.sample()
+```
+
+```python Custom Logic
+def smart_initializer(cls, sampler=None):
+    """Custom initialization logic"""
+    if cls.__name__ == "Dense":
+        return cls(units=sampler.discrete(64, 512))
+    elif cls.__name__ == "Conv2D":
+        return cls(filters=sampler.discrete(16, 128))
+    else:
+        return cls()
+
+grammar = GraphGrammar(start="Net", initializer=smart_initializer)
+```
+</CodeGroup>
+
+### Non-Terminal Symbols
+
+Prioritize expansion of certain nodes:
+
+```python
+from autogoal.grammar import GraphGrammar, Node, Path
+
+# Mark Layer as non-terminal
+grammar = GraphGrammar(
+    start="Network",
+    non_terminals=["Layer"]
+)
+
+# Network expands to Layers
+grammar.add("Network", Path("Layer", "Layer", "Output"))
+
+# Layers have multiple expansion options
+grammar.add("Layer", Node("Dense"))
+grammar.add("Layer", Node("Conv2D"))
+grammar.add("Layer", Path("Conv2D", "BatchNorm", "Activation"))
+
+# Terminal expansions
+grammar.add("Output", Node("Softmax"))
+
+# Sampling prioritizes expanding "Layer" nodes until no more non-terminals
+graph = grammar.sample()
+```
+
+### Complex Graph Patterns
+
+Combine patterns for sophisticated architectures:
+
+```python
+from autogoal.grammar import GraphGrammar, Path, Block, Node, Epsilon
+
+grammar = GraphGrammar(start="Architecture")
+
+# Residual block pattern
+class ResidualPattern(GraphPattern):
+    def build(self, graph, *, in_nodes=[], out_nodes=[], initializer):
+        # Main path
+        conv1 = initializer(Conv2D)
+        conv2 = initializer(Conv2D)
+        graph.add_node(conv1)
+        graph.add_node(conv2)
+        
+        # Connect main path
+        for in_node in in_nodes:
+            graph.add_edge(in_node, conv1)
+        graph.add_edge(conv1, conv2)
+        
+        # Skip connection (in_nodes -> conv2)
+        for in_node in in_nodes:
+            graph.add_edge(in_node, conv2)
+        
+        # Connect to outputs
+        for out_node in out_nodes:
+            graph.add_edge(conv2, out_node)
+
+grammar.add("Architecture", Path("Input", "Block1", "Block2", "Output"))
+grammar.add("Block1", ResidualPattern())
+```
+
+---
+
+## Working with Graphs
+
+### Executing Sampled Graphs
+
+```python
+from autogoal.grammar import GraphGrammar, Path
+
+# Define classes with run() methods
+class Preprocessor:
+    def run(self, data):
+        return preprocess(data)
+
+class Model:
+    def run(self, data):
+        return predict(data)
+
+# Build and sample
+grammar = GraphGrammar(start="Pipeline")
+grammar.add("Pipeline", Path(Preprocessor, Model))
+graph = grammar.sample()
+
+# Execute the graph
+def execute_node(node, in_nodes, in_values):
+    if not in_values:
+        # First node, use initial input
+        return node.run(initial_data)
+    else:
+        # Use output from previous node(s)
+        return node.run(in_values[0])
+
+results = graph.apply(execute_node)
+final_output = results[0]  # Result from terminal node
+```
+
+### Visualizing Graphs
+
+```python
+import networkx as nx
+import matplotlib.pyplot as plt
+
+# Sample a graph
+grammar = GraphGrammar(start="Network")
+grammar.add("Network", Path("Input", "Hidden", "Output"))
+graph = grammar.sample()
+
+# Visualize using NetworkX
+pos = nx.spring_layout(graph)
+nx.draw(graph, pos, with_labels=True, node_color='lightblue')
+plt.show()
+```
+
+---
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="book" href="/api/grammar/overview">
+    Grammar & Sampling overview and concepts
+  </Card>
+  <Card title="Context-Free Grammar API" icon="sitemap" href="/api/grammar/cfg">
+    API reference for context-free grammars
+  </Card>
+</CardGroup>

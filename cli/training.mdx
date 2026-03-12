@@ -1,0 +1,348 @@
+---
+title: Training Models
+description: Train AutoML models from the command line using autogoal ml fit
+---
+
+## Overview
+
+The `autogoal ml fit` command trains an AutoML model on your dataset. AutoGOAL will automatically search for the best machine learning pipeline by exploring different combinations of algorithms, preprocessing steps, and hyperparameters.
+
+## Basic Usage
+
+```bash
+autogoal ml fit <input_file> [OPTIONS]
+```
+
+### Minimal Example
+
+Train a model using default settings:
+
+```bash
+autogoal ml fit train.csv
+```
+
+This command:
+- Loads `train.csv`
+- Uses the last column as the target variable
+- Trains for 1 hour (default search timeout)
+- Saves the model to `./storage`
+
+## Command Parameters
+
+<ParamField path="input" type="Path" required>
+  Path to the input dataset file (CSV or JSON format)
+</ParamField>
+
+<ParamField path="--output" type="Path" default=".">
+  Directory where the trained model will be saved. The model is stored in a `storage/` subdirectory
+</ParamField>
+
+<ParamField path="--target" type="string" default="last column">
+  Name of the target column to predict. If not specified, the last column in the dataset is used
+</ParamField>
+
+<ParamField path="--ignore-cols" type="List[int]" default="[]">
+  List of column indices to ignore (0-based). Useful for removing ID columns or irrelevant features
+  
+  ```bash
+  autogoal ml fit data.csv --ignore-cols 0 --ignore-cols 1
+  ```
+</ParamField>
+
+<ParamField path="--format" type="string" default="auto">
+  Input file format: `csv` or `json`. Auto-detected from file extension if not specified
+</ParamField>
+
+## Training Configuration
+
+### Time and Resource Limits
+
+<ParamField path="--evaluation-timeout" type="int" default="300">
+  Maximum time (in seconds) allowed for evaluating a single pipeline. Default is 5 minutes (300 seconds)
+</ParamField>
+
+<ParamField path="--search-timeout" type="int" default="3600">
+  Total time (in seconds) for the entire search process. Default is 1 hour (3600 seconds)
+</ParamField>
+
+<ParamField path="--memory-limit" type="int" default="4294967296">
+  Maximum memory (in bytes) allowed for pipeline evaluation. Default is 4 GB (4 * 1024³ bytes)
+</ParamField>
+
+<Tip>
+You can use the utility constants from Python:
+- `Min = 60` seconds
+- `Gb = 1024³` bytes
+
+In the CLI, specify raw values in seconds and bytes.
+</Tip>
+
+### Search Parameters
+
+<ParamField path="--pop-size" type="int" default="20">
+  Population size for the evolutionary search algorithm. Larger populations explore more diverse solutions but require more resources
+</ParamField>
+
+<ParamField path="--iterations" type="int" default="100">
+  Maximum number of search iterations. The search may terminate earlier if `search-timeout` is reached
+</ParamField>
+
+<ParamField path="--random-state" type="int" default="None">
+  Random seed for reproducibility. If not specified, results will vary between runs
+</ParamField>
+
+## Complete Examples
+
+### Example 1: Basic Training
+
+Train on a CSV file with default settings:
+
+```bash
+autogoal ml fit iris.csv --target species
+```
+
+**Output:**
+```
+🏃 Training on 150 items.
+[Progress bar shows iterations, best score, evaluations]
+💾 Saving model to /current/directory/storage.
+```
+
+### Example 2: Custom Target and Output
+
+Specify target column and output directory:
+
+```bash
+autogoal ml fit housing.csv --target price --output ./models/housing
+```
+
+### Example 3: Extended Training Time
+
+Train for longer with more iterations:
+
+```bash
+autogoal ml fit train.csv \
+  --target class \
+  --search-timeout 7200 \
+  --iterations 200 \
+  --pop-size 30
+```
+
+This configuration:
+- Runs for up to 2 hours (7200 seconds)
+- Performs up to 200 iterations
+- Maintains a population of 30 candidates
+
+### Example 4: Ignoring Columns
+
+Remove ID column and irrelevant features:
+
+```bash
+autogoal ml fit data.csv \
+  --ignore-cols 0 \
+  --ignore-cols 2 \
+  --target outcome
+```
+
+This ignores columns at indices 0 and 2 (first and third columns).
+
+### Example 5: JSON Input
+
+Train on JSON data:
+
+```bash
+autogoal ml fit data.json \
+  --format json \
+  --target label \
+  --output ./models/json-model
+```
+
+### Example 6: Reproducible Training
+
+Use a random seed for reproducibility:
+
+```bash
+autogoal ml fit train.csv \
+  --target class \
+  --random-state 42 \
+  --output ./models/reproducible
+```
+
+<Note>
+With the same random state, dataset, and configuration, you should get identical results across runs.
+</Note>
+
+### Example 7: Quick Experiment
+
+Fast training for experimentation:
+
+```bash
+autogoal ml fit train.csv \
+  --target class \
+  --search-timeout 300 \
+  --evaluation-timeout 30 \
+  --iterations 20
+```
+
+This runs a 5-minute experiment with:
+- 30-second timeout per pipeline
+- Maximum 20 iterations
+
+### Example 8: Resource-Constrained Training
+
+Limit memory usage on smaller machines:
+
+```bash
+autogoal ml fit large_dataset.csv \
+  --memory-limit 2147483648 \
+  --evaluation-timeout 600
+```
+
+This limits memory to 2 GB (2 * 1024³ bytes) and allows up to 10 minutes per pipeline.
+
+## Understanding the Output
+
+### Model Storage Structure
+
+After training, the model is saved in the following structure:
+
+```
+output_directory/
+└── storage/
+    ├── algorithms/
+    │   ├── 0/
+    │   │   └── algorithm.yml
+    │   ├── 1/
+    │   │   └── algorithm.yml
+    │   └── .../
+    ├── algorithms.yml
+    └── [serialized model data]
+```
+
+### Progress Information
+
+During training, you'll see:
+
+```
+🏃 Training on 1000 items.
+
+Iteration 1/100 | Best Score: 0.823 | Evaluations: 20
+[██████████░░░░░░░░░░] 10% Complete
+```
+
+The progress bar shows:
+- Current iteration
+- Best cross-validation score found so far
+- Total number of pipeline evaluations
+- Estimated time remaining
+
+### Success Message
+
+```
+💾 Saving model to /path/to/output/storage.
+```
+
+<Tip>
+The model directory path shown in the success message is what you'll use with `autogoal ml predict` and `autogoal ml inspect`.
+</Tip>
+
+## Model Persistence
+
+The trained model includes:
+
+1. **Best pipeline**: The optimal algorithm sequence discovered
+2. **Pipeline parameters**: All hyperparameters for each algorithm
+3. **Metadata**: Input/output types, feature information
+4. **Serialized state**: The fitted model ready for predictions
+
+## Performance Considerations
+
+### Training Time
+
+Training time depends on:
+- Dataset size (rows and columns)
+- Search timeout setting
+- Complexity of the problem
+- Available computational resources
+- Number of iterations
+
+**Typical training times:**
+- Small datasets (< 1000 rows): 5-15 minutes
+- Medium datasets (1000-10000 rows): 30-60 minutes
+- Large datasets (> 10000 rows): 1-3 hours
+
+### Memory Usage
+
+Memory consumption is affected by:
+- Dataset size loaded into memory
+- Pipeline complexity (some algorithms need more memory)
+- Population size (more candidates = more memory)
+
+<Warning>
+If you encounter memory errors, reduce `--memory-limit` or `--pop-size`, or increase `--evaluation-timeout` to prevent resource-intensive pipelines from being evaluated.
+</Warning>
+
+## Error Handling
+
+### Common Errors
+
+#### File Not Found
+
+```
+⚠️  Error: No such file or directory: 'train.csv'
+```
+
+**Solution:** Verify the file path and ensure the file exists.
+
+#### Format Not Recognized
+
+```
+⚠️  Error: Input format not recognized. Must be either CSV or JSON.
+```
+
+**Solution:** Use `--format csv` or `--format json` to specify the format explicitly.
+
+#### Invalid Target Column
+
+```
+⚠️  Error: Column 'target' not found in dataset.
+```
+
+**Solution:** Check column names in your dataset and specify the correct `--target`.
+
+## Best Practices
+
+1. **Start with defaults**: Begin with default parameters and adjust based on results
+2. **Use random state**: Set `--random-state` for reproducible experiments
+3. **Monitor progress**: Watch the progress bar to understand search behavior
+4. **Save to named directories**: Use descriptive `--output` paths for different experiments
+5. **Ignore irrelevant columns**: Remove IDs and irrelevant features with `--ignore-cols`
+6. **Balance time and quality**: Longer search times generally yield better models, but with diminishing returns
+
+<Tip>
+For initial experiments, use shorter timeouts (5-10 minutes) to quickly assess data quality and problem difficulty. Then increase for final model training.
+</Tip>
+
+## After Training
+
+Once training is complete:
+
+1. **Inspect the model**: Use `autogoal ml inspect` to view the best pipeline
+2. **Make predictions**: Use `autogoal ml predict` to apply the model
+3. **Export the model**: Use `autogoal ml export` for deployment
+
+<CardGroup cols={2}>
+  <Card title="Making Predictions" icon="crystal-ball" href="/cli/prediction">
+    Learn how to use your trained model
+  </Card>
+  <Card title="Model Inspection" icon="magnifying-glass" href="/cli/prediction#inspecting-models">
+    View details about your trained pipeline
+  </Card>
+</CardGroup>
+
+## Related Commands
+
+- [`autogoal ml predict`](/cli/prediction) - Make predictions with trained models
+- [`autogoal ml inspect`](/cli/prediction#inspecting-models) - Inspect model details
+- [`autogoal ml export`](/cli/prediction#exporting-models) - Export models for deployment
+- [`autogoal data download`](/cli/datasets) - Get training datasets

@@ -1,0 +1,460 @@
+---
+title: Creating Custom Algorithm Classes
+description: Learn how to create custom algorithm classes that integrate seamlessly with AutoGOAL's pipeline system
+---
+
+## Overview
+
+AutoGOAL allows you to extend its functionality by creating custom algorithm classes. This guide shows you how to build algorithms that integrate seamlessly with AutoGOAL's pipeline system, semantic type checking, and automatic optimization.
+
+## Understanding Algorithm Base Classes
+
+AutoGOAL provides two main base classes for creating algorithms:
+
+- **`Algorithm`** - Abstract base class defining the interface
+- **`AlgorithmBase`** - Concrete base class with automatic introspection
+
+<Note>
+Always inherit from `AlgorithmBase` for your custom algorithms. It automatically implements input/output type introspection using Python's `inspect` module.
+</Note>
+
+## Basic Algorithm Structure
+
+Here's the minimal structure for a custom algorithm:
+
+```python
+from autogoal.kb import AlgorithmBase
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+
+class MyCustomClassifier(AlgorithmBase):
+    def __init__(self, alpha: float = 0.5, max_iter: int = 100):
+        """Initialize algorithm with hyperparameters."""
+        self.alpha = alpha
+        self.max_iter = max_iter
+        self.model_ = None
+    
+    def run(self, X: MatrixContinuousDense, y: VectorCategorical) -> VectorCategorical:
+        """Execute the algorithm.
+        
+        Args:
+            X: Input feature matrix
+            y: Target labels
+            
+        Returns:
+            Predictions
+        """
+        # Your algorithm implementation
+        self.model_ = self._train(X, y)
+        return self._predict(X)
+    
+    def _train(self, X, y):
+        # Training logic here
+        pass
+    
+    def _predict(self, X):
+        # Prediction logic here
+        pass
+```
+
+<Steps>
+
+### Step 1: Define Type Annotations
+
+Type annotations in the `run` method are **required**. They enable:
+- Automatic pipeline building
+- Type compatibility checking
+- Semantic validation
+
+```python
+def run(self, X: MatrixContinuousDense, y: VectorCategorical) -> VectorCategorical:
+    pass
+```
+
+### Step 2: Implement Hyperparameters
+
+All hyperparameters must be defined in `__init__` and stored as instance attributes:
+
+```python
+def __init__(self, alpha: float = 0.5, beta: float = 0.1, max_iter: int = 100):
+    self.alpha = alpha
+    self.beta = beta
+    self.max_iter = max_iter
+```
+
+<Tip>
+AutoGOAL will automatically optimize these hyperparameters during search. Use type hints to define the parameter space.
+</Tip>
+
+### Step 3: Implement the Run Method
+
+The `run` method contains your algorithm's logic:
+
+```python
+def run(self, X: MatrixContinuousDense, y: VectorCategorical) -> VectorCategorical:
+    """Train and predict in one step."""
+    # Training mode
+    if hasattr(self, '_training') and self._training:
+        self.model_ = self._fit(X, y)
+        return y  # Return dummy predictions during training
+    
+    # Inference mode
+    return self._predict(X)
+```
+
+</Steps>
+
+## Advanced Features
+
+### Handling Train/Eval Modes
+
+Algorithms can respond to pipeline messages:
+
+```python
+class AdaptiveClassifier(AlgorithmBase):
+    def __init__(self, learning_rate: float = 0.01):
+        self.learning_rate = learning_rate
+        self._mode = 'eval'
+    
+    def train(self):
+        """Switch to training mode."""
+        self._mode = 'train'
+    
+    def eval(self):
+        """Switch to evaluation mode."""
+        self._mode = 'eval'
+    
+    def run(self, X: MatrixContinuousDense, y: VectorCategorical) -> VectorCategorical:
+        if self._mode == 'train':
+            self.model_ = self._fit(X, y)
+            return y
+        else:
+            return self._predict(X)
+```
+
+Pipelines can send messages to all algorithms:
+
+```python
+pipeline.send('train')  # Calls train() on all algorithms
+pipeline.run(X_train, y_train)
+pipeline.send('eval')   # Calls eval() on all algorithms
+y_pred = pipeline.run(X_test)
+```
+
+### Serialization and Persistence
+
+`AlgorithmBase` provides built-in serialization:
+
+```python
+from pathlib import Path
+
+# Save algorithm
+algorithm = MyCustomClassifier(alpha=0.8)
+algorithm.save(Path('./models/my_classifier'))
+
+# Load algorithm
+loaded_algorithm = MyCustomClassifier.load(Path('./models/my_classifier'))
+```
+
+<Note>
+The default serialization uses `dill` (enhanced pickle). Override `save_model()` and `load_model()` for custom serialization.
+</Note>
+
+### Custom Serialization
+
+```python
+import json
+from pathlib import Path
+
+class CustomSerializableAlgorithm(AlgorithmBase):
+    def save_model(self, path: Path):
+        """Custom serialization logic."""
+        model_data = {
+            'weights': self.model_.weights.tolist(),
+            'bias': self.model_.bias,
+            'params': {'alpha': self.alpha, 'max_iter': self.max_iter}
+        }
+        with open(path / 'model.json', 'w') as f:
+            json.dump(model_data, f)
+    
+    @classmethod
+    def load_model(cls, path: Path):
+        """Custom deserialization logic."""
+        with open(path / 'model.json', 'r') as f:
+            model_data = json.load(f)
+        
+        instance = cls(**model_data['params'])
+        # Restore model state
+        instance.model_ = cls._restore_model(model_data)
+        return instance
+```
+
+## Semantic Types
+
+AutoGOAL uses semantic types for intelligent pipeline construction:
+
+### Common Semantic Types
+
+<CodeGroup>
+
+```python Data Types
+from autogoal.kb import (
+    MatrixContinuousDense,    # Dense numeric matrix
+    MatrixContinuousSparse,   # Sparse numeric matrix
+    MatrixCategorical,        # Categorical matrix
+    VectorCategorical,        # Categorical vector
+    VectorContinuous,         # Numeric vector
+    Tensor3,                  # 3D tensor (images)
+    Tensor4,                  # 4D tensor (batches)
+)
+```
+
+```python Text Types
+from autogoal.kb import (
+    Sentence,                 # Single sentence
+    Document,                 # Document text
+    List[Sentence],           # List of sentences
+    Seq[Document],            # Sequence of documents
+)
+```
+
+```python Sequence Types
+from autogoal.kb import Seq
+
+# Seq wraps any type for batch processing
+Seq[MatrixContinuousDense]   # List of matrices
+Seq[Sentence]                 # List of sentences
+Seq[VectorCategorical]        # List of vectors
+```
+
+</CodeGroup>
+
+### Creating Multi-Input Algorithms
+
+```python
+from autogoal.kb import AlgorithmBase
+from autogoal.kb import MatrixContinuousDense, MatrixCategorical, VectorCategorical
+
+class MultiModalClassifier(AlgorithmBase):
+    def __init__(self, fusion: str = 'concat'):
+        self.fusion = fusion
+    
+    def run(
+        self,
+        X_numeric: MatrixContinuousDense,
+        X_categorical: MatrixCategorical,
+        y: VectorCategorical
+    ) -> VectorCategorical:
+        """Classifier that handles both numeric and categorical features."""
+        # Combine features based on fusion strategy
+        if self.fusion == 'concat':
+            X_combined = self._concatenate(X_numeric, X_categorical)
+        elif self.fusion == 'attention':
+            X_combined = self._attention_fusion(X_numeric, X_categorical)
+        
+        return self._classify(X_combined, y)
+```
+
+### Supervised Learning Types
+
+```python
+from autogoal.kb import Supervised, MatrixContinuousDense, VectorCategorical
+
+class SupervisedTransformer(AlgorithmBase):
+    """Transformer that uses labels during fitting."""
+    
+    def run(
+        self,
+        X: Supervised[MatrixContinuousDense],
+        y: VectorCategorical
+    ) -> MatrixContinuousDense:
+        """Transform features using label information."""
+        # Use y to guide feature transformation
+        return self._supervised_transform(X, y)
+```
+
+## Sequence Algorithms
+
+AutoGOAL can automatically lift algorithms to work on sequences:
+
+```python
+from autogoal.kb import make_seq_algorithm
+
+# Original algorithm works on single instances
+class ImageClassifier(AlgorithmBase):
+    def run(self, image: Tensor3, y: VectorCategorical) -> VectorCategorical:
+        return self._classify_single(image)
+
+# Create batch version automatically
+BatchImageClassifier = make_seq_algorithm(ImageClassifier)
+
+# Now it accepts lists of images
+batch_classifier = BatchImageClassifier(alpha=0.5)
+results = batch_classifier.run(
+    images=[img1, img2, img3],  # List of Tensor3
+    y=[[0], [1], [0]]           # List of labels
+)  # Returns list of predictions
+```
+
+<Warning>
+`make_seq_algorithm` is automatically applied by AutoGOAL during pipeline building. You typically don't need to call it manually.
+</Warning>
+
+## Testing Algorithm Compatibility
+
+Test if your algorithm is compatible with input types:
+
+```python
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+
+# Check compatibility
+is_compatible = MyCustomClassifier.is_compatible_with([
+    MatrixContinuousDense,
+    VectorCategorical
+])
+
+print(f"Compatible: {is_compatible}")
+
+# Inspect types
+print(f"Input types: {MyCustomClassifier.input_types()}")
+print(f"Input args: {MyCustomClassifier.input_args()}")
+print(f"Output type: {MyCustomClassifier.output_type()}")
+```
+
+## Complete Example
+
+Here's a complete custom algorithm with all features:
+
+```python
+from autogoal.kb import AlgorithmBase
+from autogoal.kb import MatrixContinuousDense, VectorCategorical
+from autogoal.utils import nice_repr
+import numpy as np
+from pathlib import Path
+import pickle
+
+@nice_repr
+class CustomRandomForest(AlgorithmBase):
+    """Custom Random Forest implementation for AutoGOAL."""
+    
+    def __init__(
+        self,
+        n_trees: int = 100,
+        max_depth: int = 10,
+        min_samples_split: int = 2,
+        learning_rate: float = 0.1
+    ):
+        self.n_trees = n_trees
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.learning_rate = learning_rate
+        self.trees_ = []
+        self._mode = 'eval'
+    
+    def run(
+        self,
+        X: MatrixContinuousDense,
+        y: VectorCategorical
+    ) -> VectorCategorical:
+        """Train or predict based on current mode."""
+        if self._mode == 'train':
+            return self._fit(X, y)
+        else:
+            return self._predict(X)
+    
+    def _fit(self, X, y):
+        """Train the random forest."""
+        self.trees_ = []
+        for i in range(self.n_trees):
+            # Build and train each tree
+            tree = self._build_tree(X, y, depth=0)
+            self.trees_.append(tree)
+        return y  # Return training labels
+    
+    def _predict(self, X):
+        """Make predictions."""
+        if not self.trees_:
+            raise ValueError("Model not trained. Call train() first.")
+        
+        # Aggregate predictions from all trees
+        predictions = [self._predict_tree(tree, X) for tree in self.trees_]
+        return self._majority_vote(predictions)
+    
+    def _build_tree(self, X, y, depth):
+        """Build a single decision tree."""
+        # Implementation details...
+        pass
+    
+    def _predict_tree(self, tree, X):
+        """Predict using a single tree."""
+        pass
+    
+    def _majority_vote(self, predictions):
+        """Combine predictions from all trees."""
+        pass
+    
+    def train(self):
+        """Switch to training mode."""
+        self._mode = 'train'
+    
+    def eval(self):
+        """Switch to evaluation mode."""
+        self._mode = 'eval'
+    
+    def save_model(self, path: Path):
+        """Save the trained model."""
+        with open(path / 'random_forest.pkl', 'wb') as f:
+            pickle.dump({
+                'trees': self.trees_,
+                'n_trees': self.n_trees,
+                'max_depth': self.max_depth,
+            }, f)
+    
+    @classmethod
+    def load_model(cls, path: Path):
+        """Load a trained model."""
+        with open(path / 'random_forest.pkl', 'rb') as f:
+            data = pickle.load(f)
+        
+        instance = cls(
+            n_trees=data['n_trees'],
+            max_depth=data['max_depth']
+        )
+        instance.trees_ = data['trees']
+        return instance
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+
+<Card title="Type Annotations" icon="code">
+Always use proper semantic type annotations in the `run` method. They're not optional!
+</Card>
+
+<Card title="Immutable Hyperparameters" icon="lock">
+Never modify hyperparameters after initialization. Store them as instance attributes.
+</Card>
+
+<Card title="Stateless Run" icon="refresh">
+The `run` method should be idempotent when possible. Avoid side effects.
+</Card>
+
+<Card title="Error Handling" icon="shield">
+Raise informative exceptions for invalid inputs or states. AutoGOAL will handle them gracefully.
+</Card>
+
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+
+<Card title="Search Strategies" href="/guides/search-strategies" icon="magnifying-glass">
+Learn how to optimize your custom algorithms
+</Card>
+
+<Card title="Contrib System" href="/guides/contrib-system" icon="plug">
+Package your algorithms as a contrib module
+</Card>
+
+</CardGroup>

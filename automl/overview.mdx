@@ -1,0 +1,242 @@
+---
+title: AutoML Overview
+description: Learn how to use the AutoML class for automated machine learning in AutoGOAL
+---
+
+## Introduction
+
+The `AutoML` class is the main interface for automated machine learning in AutoGOAL. It provides a high-level API that automatically builds, searches, and optimizes machine learning pipelines for your specific problem.
+
+<Note>
+  AutoML automatically infers input and output types from your data, discovers available algorithms, and searches for the best pipeline configuration.
+</Note>
+
+## How AutoML Works
+
+AutoML follows a simple three-step process:
+
+<Steps>
+  <Step title="Define the Problem">
+    Specify the input and output semantic types that describe your machine learning problem (e.g., classification, regression, text analysis).
+  </Step>
+  
+  <Step title="Search for Pipelines">
+    AutoML automatically discovers available algorithms and searches for optimal pipeline configurations using evolutionary optimization.
+  </Step>
+  
+  <Step title="Evaluate and Select">
+    The best pipelines are evaluated using cross-validation and ranked according to your specified objective metrics.
+  </Step>
+</Steps>
+
+## Basic Usage
+
+Here's a minimal example using AutoML for a classification task:
+
+```python
+from autogoal.datasets import cars
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+from autogoal.search import ConsoleLogger
+
+# Load dataset
+X, y = cars.load()
+
+# Instantiate AutoML and define input/output types
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+)
+
+# Run the pipeline search process
+automl.fit(X, y, logger=ConsoleLogger())
+
+# Report the best pipeline
+print(automl.best_pipelines_)
+print(automl.best_scores_)
+```
+
+## Key Parameters
+
+The AutoML class accepts several important parameters that control its behavior:
+
+<ParamField path="input" type="SemanticType or tuple" default="None">
+  The input semantic type(s) that describe your data. If `None`, AutoML will attempt to infer the type automatically from the data.
+  
+  For supervised learning, provide a tuple like `(MatrixContinuousDense, Supervised[VectorCategorical])`.
+</ParamField>
+
+<ParamField path="output" type="SemanticType" default="None">
+  The output semantic type for your predictions. Common values include `VectorCategorical` for classification and `VectorContinuous` for regression.
+  
+  If `None`, the type will be inferred from the target values.
+</ParamField>
+
+<ParamField path="search_iterations" type="int" default="100">
+  The number of iterations the search algorithm will run. More iterations allow exploring more pipeline configurations but take longer.
+</ParamField>
+
+<ParamField path="objectives" type="callable or tuple" default="accuracy">
+  The objective function(s) to optimize. Can be a single metric like `accuracy` or a tuple of metrics for multi-objective optimization.
+  
+  Common metrics include `accuracy`, `f1_score`, `mean_squared_error`, etc.
+</ParamField>
+
+<ParamField path="validation_split" type="float" default="0.3">
+  The proportion of training data to use for validation during cross-validation (between 0 and 1).
+</ParamField>
+
+<ParamField path="cross_validation_steps" type="int" default="3">
+  The number of cross-validation iterations to perform when evaluating each pipeline.
+</ParamField>
+
+<ParamField path="cross_validation" type="str" default="median">
+  The aggregation method for cross-validation scores. Options are `"median"` or `"mean"`.
+</ParamField>
+
+<ParamField path="search_algorithm" type="class" default="PESearch">
+  The search algorithm to use for pipeline optimization. Default is `PESearch` (Population-based Evolutionary Search).
+</ParamField>
+
+<ParamField path="random_state" type="int" default="None">
+  Random seed for reproducibility. Set to a fixed integer to get consistent results across runs.
+</ParamField>
+
+<ParamField path="errors" type="str" default="warn">
+  How to handle errors during pipeline evaluation:
+  - `"warn"`: Log a warning and continue
+  - `"ignore"`: Silently ignore errors
+  - `"raise"`: Raise the exception and stop execution
+</ParamField>
+
+<ParamField path="registry" type="list" default="None">
+  A custom list of algorithm classes to use. If `None`, AutoML automatically discovers all available algorithms from `autogoal-contrib`.
+</ParamField>
+
+<ParamField path="include_filter" type="str" default=".*">
+  A regex pattern to filter which algorithms to include by name.
+</ParamField>
+
+<ParamField path="exclude_filter" type="str" default="None">
+  A regex pattern to exclude specific algorithms by name.
+</ParamField>
+
+<ParamField path="remote_sources" type="list" default="None">
+  A list of remote sources for discovering additional algorithms. Each source is a tuple of `(url, port)` or just a URL string.
+</ParamField>
+
+## Core Methods
+
+### fit(X, y=None, **kwargs)
+
+Train the AutoML instance on your dataset.
+
+**Parameters:**
+- `X`: Input features (numpy array, list, or any supported format)
+- `y`: Target values (for supervised learning)
+- `**kwargs`: Additional arguments passed to the search algorithm
+
+```python
+automl.fit(X_train, y_train, logger=ConsoleLogger())
+```
+
+### predict(X, solution_index=0)
+
+Make predictions using the best pipeline found.
+
+**Parameters:**
+- `X`: Input features to predict
+- `solution_index`: Which pipeline to use (default: 0 for the best one)
+
+**Returns:** Predictions for the input data
+
+```python
+y_pred = automl.predict(X_test)
+```
+
+### score(X, y=None, solution_index=None)
+
+Evaluate the performance of the best pipelines.
+
+**Parameters:**
+- `X`: Input features
+- `y`: True target values
+- `solution_index`: Which pipeline to evaluate (default: None evaluates all)
+
+**Returns:** List of tuples containing scores for each objective function
+
+```python
+scores = automl.score(X_test, y_test)
+print(scores)
+```
+
+### predict_all(X)
+
+Get predictions from all found pipelines (not just the best one).
+
+**Returns:** List of predictions, one for each pipeline
+
+```python
+all_predictions = automl.predict_all(X_test)
+```
+
+## Accessing Results
+
+After calling `fit()`, AutoML provides access to the results:
+
+- **`best_pipelines_`**: List of the best pipeline objects found
+- **`best_scores_`**: List of scores corresponding to each best pipeline
+
+```python
+print(f"Best pipeline: {automl.best_pipelines_[0]}")
+print(f"Best score: {automl.best_scores_[0]}")
+```
+
+## Example with Custom Configuration
+
+```python
+from autogoal.ml import AutoML
+from autogoal.search import PESearch
+from sklearn.metrics import f1_score
+
+automl = AutoML(
+    search_algorithm=PESearch,
+    search_iterations=1000,
+    objectives=f1_score,
+    validation_split=0.3,
+    cross_validation_steps=5,
+    cross_validation="median",
+    random_state=42,
+    errors="warn",
+    pop_size=50,                    # Passed to PESearch
+    evaluation_timeout=300,          # 5 minutes per pipeline
+    memory_limit=10 * 1024**3,      # 10 GB RAM limit
+)
+
+automl.fit(X_train, y_train)
+print(f"Score: {automl.score(X_test, y_test)}")
+```
+
+<Warning>
+  Set appropriate `evaluation_timeout` and `memory_limit` values to prevent individual pipelines from consuming excessive resources.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Classification Tasks" icon="chart-simple" href="/automl/classification">
+    Learn how to use AutoML for classification problems
+  </Card>
+  
+  <Card title="Regression Tasks" icon="chart-line" href="/automl/regression">
+    Apply AutoML to regression and continuous prediction tasks
+  </Card>
+  
+  <Card title="Custom Pipelines" icon="diagram-project" href="/automl/custom-pipelines">
+    Build and customize pipelines manually for more control
+  </Card>
+  
+  <Card title="Semantic Types" icon="tags" href="/concepts/semantic-types">
+    Understand semantic types for defining your problem
+  </Card>
+</CardGroup>

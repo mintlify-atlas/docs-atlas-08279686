@@ -1,0 +1,545 @@
+---
+title: Search Algorithms
+description: Detailed documentation of search algorithms in AutoGOAL
+---
+
+This page documents all search algorithms available in AutoGOAL, including their parameters, usage patterns, and implementation details.
+
+## SearchAlgorithm
+
+Base class for all search algorithms. Provides common functionality for pipeline generation, evaluation, and multi-objective optimization.
+
+**Source**: `autogoal/search/_base.py:22`
+
+### Constructor
+
+```python
+SearchAlgorithm(
+    generator_fn=None,
+    fitness_fn=None,
+    pop_size=20,
+    maximize=(True,),
+    errors="raise",
+    early_stop=0.5,
+    evaluation_timeout=60000,
+    memory_limit=4294967296,
+    search_timeout=300000,
+    target_fn=None,
+    allow_duplicates=True,
+    logger=None,
+    ranking_fn=None
+)
+```
+
+### Parameters
+
+<ParamField path="generator_fn" type="callable" default="None">
+  Function that takes a `Sampler` and returns a pipeline. Either this or `fitness_fn` must be provided.
+  
+  **Signature**: `generator_fn(sampler: Sampler) -> Pipeline`
+</ParamField>
+
+<ParamField path="fitness_fn" type="callable" default="None">
+  Function that evaluates a pipeline and returns fitness score(s). Either this or `generator_fn` must be provided.
+  
+  **Signature**: `fitness_fn(pipeline) -> float | tuple[float, ...]`
+</ParamField>
+
+<ParamField path="pop_size" type="int" default="20">
+  Number of solutions to evaluate per generation. Larger values explore more broadly but increase computation.
+</ParamField>
+
+<ParamField path="maximize" type="bool | tuple[bool, ...]" default="(True,)">
+  Whether to maximize (True) or minimize (False) each objective. Single bool for one objective, tuple for multiple.
+  
+  **Example**: `maximize=(True, False)` maximizes first objective, minimizes second
+</ParamField>
+
+<ParamField path="errors" type="str" default="raise">
+  How to handle evaluation errors:
+  - `"raise"`: Stop search and raise exception
+  - `"ignore"`: Continue search, assign worst fitness to failed solutions
+</ParamField>
+
+<ParamField path="early_stop" type="float | int" default="0.5">
+  Early stopping criterion:
+  - Float (0-1): Stop if no improvement for this fraction of total generations
+  - Int: Stop if no improvement for this many generations
+  - 0: Disable early stopping
+</ParamField>
+
+<ParamField path="evaluation_timeout" type="int" default="60000">
+  Maximum time in milliseconds for evaluating a single pipeline. Use 0 to disable timeout.
+</ParamField>
+
+<ParamField path="memory_limit" type="int" default="4294967296">
+  Maximum memory in bytes (4GB default) for evaluating a single pipeline. Use 0 to disable limit.
+</ParamField>
+
+<ParamField path="search_timeout" type="int" default="300000">
+  Maximum time in milliseconds for the entire search process (5 minutes default). Use 0 to disable.
+</ParamField>
+
+<ParamField path="target_fn" type="tuple[float, ...]" default="None">
+  Target fitness values. Search stops early if any solution dominates this target.
+  
+  **Example**: `target_fn=(0.95, 100)` for 95% accuracy in under 100ms
+</ParamField>
+
+<ParamField path="allow_duplicates" type="bool" default="True">
+  Whether to allow evaluating identical pipelines multiple times. Set to False to skip duplicates.
+</ParamField>
+
+<ParamField path="logger" type="Logger" default="None">
+  Logger instance for tracking search progress. Defaults to silent `Logger()` if not provided.
+</ParamField>
+
+<ParamField path="ranking_fn" type="callable" default="None">
+  Custom function for ranking solutions. Defaults to Pareto dominance ranking.
+  
+  **Signature**: `ranking_fn(solutions, fitnesses) -> tuple[float, ...]`
+</ParamField>
+
+### Methods
+
+#### run
+
+```python
+run(generations=None, logger=None) -> tuple[list, list]
+```
+
+Execute the search algorithm for the specified number of generations.
+
+<ParamField path="generations" type="int" default="None">
+  Maximum number of generations to run. If None, runs indefinitely (until timeout or target).
+</ParamField>
+
+<ParamField path="logger" type="Logger" default="None">
+  Logger to use for this run. Overrides the logger passed to constructor.
+</ParamField>
+
+<ResponseField name="return" type="tuple[list, list]">
+  Returns `(best_solutions, best_fitnesses)` where:
+  - `best_solutions`: List of Pareto-optimal pipelines
+  - `best_fitnesses`: List of corresponding fitness tuples
+</ResponseField>
+
+### Example
+
+```python
+from autogoal.search import SearchAlgorithm
+from autogoal.kb import AlgorithmSpace
+
+# This is an abstract base class - use concrete implementations
+# See RandomSearch, PESearch, etc. below
+```
+
+---
+
+## RandomSearch
+
+Simple baseline algorithm that samples pipelines uniformly at random. Useful for benchmarking and quick exploration.
+
+**Source**: `autogoal/search/_random.py:7`
+
+### Constructor
+
+```python
+RandomSearch(
+    *args,
+    random_state=None,
+    **kwargs
+)
+```
+
+### Additional Parameters
+
+<ParamField path="random_state" type="int" default="None">
+  Seed for random number generator. Set for reproducible results.
+</ParamField>
+
+<Info>
+  All parameters from `SearchAlgorithm` are also supported.
+</Info>
+
+### Example
+
+```python
+from autogoal.search import RandomSearch
+from autogoal.kb import build_pipeline_graph
+
+# Define search space
+space = build_pipeline_graph(
+    input_types=["text"],
+    output_type="class"
+)
+
+# Configure random search
+search = RandomSearch(
+    generator_fn=lambda sampler: space.sample(sampler),
+    fitness_fn=evaluate_pipeline,
+    pop_size=50,
+    maximize=True,
+    search_timeout=1800,  # 30 minutes
+    random_state=42  # Reproducible
+)
+
+# Run search
+best_pipelines, best_scores = search.run(generations=20)
+print(f"Best score: {best_scores[0]}")
+```
+
+### Use Cases
+
+- **Baseline Comparison**: Establish performance floor for more sophisticated algorithms
+- **Quick Exploration**: Rapidly sample diverse pipelines from large search spaces
+- **Debugging**: Reproducible search behavior with fixed random seed
+
+---
+
+## PESearch
+
+Probabilistic Estimation Search learns a probabilistic model of successful pipelines and uses it to guide sampling. Based on the PEDA (Probabilistic Estimation of Distribution Algorithm) paradigm.
+
+**Source**: `autogoal/search/_pge.py:14`
+
+### Constructor
+
+```python
+PESearch(
+    *args,
+    learning_factor=0.05,
+    selection=0.2,
+    epsilon_greed=0.1,
+    random_state=None,
+    name=None,
+    save=False,
+    **kwargs
+)
+```
+
+### Additional Parameters
+
+<ParamField path="learning_factor" type="float" default="0.05">
+  Learning rate for updating the probabilistic model (0-1):
+  - Lower values: Slower learning, more stable
+  - Higher values: Faster adaptation, more volatile
+  
+  **Typical range**: 0.01 to 0.2
+</ParamField>
+
+<ParamField path="selection" type="float" default="0.2">
+  Fraction of population to learn from (0-1). Only the top `selection * pop_size` solutions update the model.
+  
+  **Example**: `selection=0.2` with `pop_size=50` learns from top 10 solutions
+</ParamField>
+
+<ParamField path="epsilon_greed" type="float" default="0.1">
+  Fraction of random exploration (0-1):
+  - `epsilon_greed=0.1`: 10% random sampling, 90% model-guided
+  - Prevents premature convergence to local optima
+</ParamField>
+
+<ParamField path="random_state" type="int" default="None">
+  Seed for random number generator. Set for reproducible results.
+</ParamField>
+
+<ParamField path="name" type="str" default="None">
+  Name for saved model files. Defaults to timestamp if not provided.
+</ParamField>
+
+<ParamField path="save" type="bool" default="False">
+  Whether to save the learned probabilistic model to disk after each generation.
+  
+  **File**: `model-{name}.pickle`
+</ParamField>
+
+<Info>
+  All parameters from `SearchAlgorithm` are also supported. **Note**: PESearch only supports single-objective optimization. Use `NSPESearch` for multiple objectives.
+</Info>
+
+### Methods
+
+#### load
+
+```python
+load(name_pickle_file: str)
+```
+
+Load a previously saved probabilistic model to resume or transfer learning.
+
+<ParamField path="name_pickle_file" type="str">
+  Path to pickle file containing saved model.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+```python Basic Usage
+from autogoal.search import PESearch
+from autogoal.kb import build_pipeline_graph
+
+space = build_pipeline_graph(
+    input_types=["matrix"],
+    output_type="class"
+)
+
+search = PESearch(
+    generator_fn=lambda sampler: space.sample(sampler),
+    fitness_fn=evaluate_accuracy,
+    pop_size=40,
+    maximize=True,
+    learning_factor=0.1,
+    selection=0.25,
+    epsilon_greed=0.15,
+    random_state=42
+)
+
+best_pipelines, best_scores = search.run(generations=50)
+```
+
+```python Transfer Learning
+from autogoal.search import PESearch
+
+# Train on one dataset
+search1 = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate_dataset1,
+    name="model_dataset1",
+    save=True
+)
+search1.run(generations=30)
+
+# Transfer learned model to similar dataset
+search2 = PESearch(
+    generator_fn=build_pipeline,
+    fitness_fn=evaluate_dataset2,
+    name="model_dataset2"
+)
+search2.load("model-model_dataset1.pickle")
+best, scores = search2.run(generations=20)
+```
+</CodeGroup>
+
+### Algorithm Details
+
+PESearch maintains a probabilistic model over the search space and updates it each generation:
+
+1. **Sampling**: Generate `pop_size` pipelines, with `epsilon_greed` fraction sampled randomly
+2. **Evaluation**: Compute fitness for all pipelines
+3. **Selection**: Select top `selection` fraction of pipelines
+4. **Learning**: Update probabilistic model using selected pipelines:
+   ```
+   model_new = (1 - learning_factor) * model_old + learning_factor * marginal(selected)
+   ```
+5. **Iteration**: Repeat until termination
+
+---
+
+## NSPESearch
+
+Non-dominated Sorting Probabilistic Estimation Search extends PESearch for multi-objective optimization using NSGA-II style ranking.
+
+**Source**: `autogoal/search/_nspge.py:7`
+
+### Constructor
+
+```python
+NSPESearch(
+    *args,
+    ranking_fn=None,
+    **kwargs
+)
+```
+
+### Additional Parameters
+
+<ParamField path="ranking_fn" type="callable" default="None">
+  Custom ranking function for multi-objective optimization. Defaults to non-dominated sorting with crowding distance.
+  
+  **Signature**: `ranking_fn(solutions, fitnesses) -> list[float]`
+</ParamField>
+
+<Info>
+  All parameters from `PESearch` and `SearchAlgorithm` are supported. Unlike PESearch, NSPESearch supports multiple objectives.
+</Info>
+
+### Example
+
+```python
+from autogoal.search import NSPESearch
+from autogoal.kb import build_pipeline_graph
+
+space = build_pipeline_graph(
+    input_types=["text"],
+    output_type="class"
+)
+
+def multi_objective_fitness(pipeline):
+    accuracy = evaluate_accuracy(pipeline)
+    inference_time = measure_inference_time(pipeline)
+    model_size = get_model_size(pipeline)
+    
+    return (accuracy, inference_time, model_size)
+
+search = NSPESearch(
+    generator_fn=lambda sampler: space.sample(sampler),
+    fitness_fn=multi_objective_fitness,
+    maximize=(True, False, False),  # max accuracy, min time, min size
+    pop_size=60,
+    learning_factor=0.08,
+    selection=0.3,
+    search_timeout=7200  # 2 hours
+)
+
+pareto_front, scores = search.run(generations=100)
+
+# All solutions in pareto_front are non-dominated
+for pipeline, score in zip(pareto_front, scores):
+    print(f"Accuracy: {score[0]:.3f}, Time: {score[1]:.2f}ms, Size: {score[2]/1e6:.1f}MB")
+```
+
+### Algorithm Details
+
+NSPESearch uses non-dominated sorting to handle multiple objectives:
+
+1. **Pareto Fronts**: Solutions are grouped into fronts where:
+   - Front 0: Non-dominated solutions (Pareto optimal)
+   - Front 1: Dominated only by Front 0
+   - Front k: Dominated only by Fronts 0..k-1
+
+2. **Selection**: Top solutions are selected by:
+   - Preferring lower fronts (better dominance rank)
+   - Within a front, using crowding distance for diversity
+
+3. **Crowding Distance**: Measures density of solutions in objective space:
+   - Higher distance = more isolated = more valuable for diversity
+   - Boundary solutions get infinite distance
+
+---
+
+## SurrogateSearch
+
+Meta-learning search algorithm that uses a surrogate model to predict pipeline performance without full evaluation.
+
+**Source**: `autogoal/search/_learning.py:11`
+
+<Warning>
+  SurrogateSearch is experimental and may not be fully implemented. Use with caution.
+</Warning>
+
+### Constructor
+
+```python
+SurrogateSearch(
+    base_search,
+    estimator,
+    generation_size=10,
+    initial_pop_size=10,
+    *args,
+    **kwargs
+)
+```
+
+### Additional Parameters
+
+<ParamField path="base_search" type="callable" default="required">
+  Factory function that creates a base search algorithm instance.
+  
+  **Signature**: `base_search() -> SearchAlgorithm`
+</ParamField>
+
+<ParamField path="estimator" type="object" default="required">
+  Machine learning model for predicting pipeline performance. Should implement scikit-learn estimator interface.
+</ParamField>
+
+<ParamField path="generation_size" type="int" default="10">
+  Number of solutions to generate per iteration.
+</ParamField>
+
+<ParamField path="initial_pop_size" type="int" default="10">
+  Number of pipelines to fully evaluate before using surrogate predictions.
+</ParamField>
+
+### Concept
+
+SurrogateSearch aims to reduce expensive pipeline evaluations:
+
+1. **Initial Sampling**: Fully evaluate `initial_pop_size` pipelines
+2. **Surrogate Training**: Train `estimator` on evaluated pipelines
+3. **Guided Search**: Use `base_search` with surrogate predictions
+4. **Validation**: Fully evaluate promising pipelines
+
+### Example
+
+```python
+from autogoal.search import SurrogateSearch, RandomSearch
+from sklearn.ensemble import RandomForestRegressor
+
+search = SurrogateSearch(
+    base_search=lambda: RandomSearch(
+        generator_fn=build_pipeline,
+        fitness_fn=surrogate_predict,
+        pop_size=20
+    ),
+    estimator=RandomForestRegressor(n_estimators=100),
+    generation_size=15,
+    initial_pop_size=20,
+    generator_fn=build_pipeline,
+    fitness_fn=true_evaluate
+)
+
+best, scores = search.run(generations=50)
+```
+
+## Comparison
+
+| Algorithm | Single-Objective | Multi-Objective | Learning | Complexity |
+|-----------|-----------------|-----------------|----------|------------|
+| RandomSearch | ✓ | ✓ | None | Low |
+| PESearch | ✓ | ✗ | Probabilistic Model | Medium |
+| NSPESearch | ✗ | ✓ | Probabilistic Model | High |
+| SurrogateSearch | ✓ | ✓ | Meta-learning | Very High |
+
+## Choosing an Algorithm
+
+<AccordionGroup>
+  <Accordion title="Use RandomSearch when...">
+    - Establishing baseline performance
+    - Search space is small or well-behaved
+    - You need reproducible results
+    - Debugging pipeline generation
+  </Accordion>
+  
+  <Accordion title="Use PESearch when...">
+    - Optimizing a single objective (accuracy, speed, etc.)
+    - Search space has exploitable structure
+    - You have sufficient generations (50+)
+    - You want to save/reuse learned models
+  </Accordion>
+  
+  <Accordion title="Use NSPESearch when...">
+    - Optimizing multiple objectives simultaneously
+    - You need a Pareto front of trade-off solutions
+    - Objectives conflict (accuracy vs speed, etc.)
+    - You have large population sizes (50+)
+  </Accordion>
+  
+  <Accordion title="Use SurrogateSearch when...">
+    - Pipeline evaluation is very expensive (hours)
+    - You have domain knowledge to encode in estimator
+    - Experimenting with meta-learning approaches
+    - Be aware this is experimental functionality
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Logger Configuration" icon="wrench" href="./loggers">
+    Configure logging and monitoring for search progress
+  </Card>
+  <Card title="Search Overview" icon="book" href="./overview">
+    Return to search module overview
+  </Card>
+</CardGroup>

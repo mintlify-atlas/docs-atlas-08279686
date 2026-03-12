@@ -1,0 +1,305 @@
+---
+title: "Metrics"
+description: "Evaluation metrics for machine learning models in AutoGOAL"
+icon: "chart-line"
+---
+
+AutoGOAL provides a comprehensive set of metrics for evaluating machine learning models, including classification metrics, clustering metrics, and fitness functions for optimization.
+
+## Classification Metrics
+
+### accuracy
+
+Computes the accuracy score for classification tasks.
+
+```python
+from autogoal.ml.metrics import accuracy
+
+score = accuracy(y_true, y_pred)
+```
+
+<ParamField path="ytrue" type="array-like">
+  True labels for the dataset
+</ParamField>
+
+<ParamField path="ypred" type="array-like">
+  Predicted labels from the model
+</ParamField>
+
+<ResponseField name="score" type="float">
+  Accuracy score between 0 and 1, where 1 is perfect accuracy
+</ResponseField>
+
+#### Example
+
+```python
+import numpy as np
+from autogoal.ml.metrics import accuracy
+
+y_true = [0, 1, 2, 2, 1]
+y_pred = [0, 1, 2, 1, 1]
+
+acc = accuracy(y_true, y_pred)
+print(f"Accuracy: {acc}")  # Output: Accuracy: 0.8
+```
+
+## Clustering Metrics
+
+### calinski_harabasz_score
+
+Computes the Calinski and Harabasz score, also known as the Variance Ratio Criterion. This metric measures the ratio between within-cluster dispersion and between-cluster dispersion.
+
+```python
+from autogoal.ml.metrics import calinski_harabasz_score
+
+score = calinski_harabasz_score(X, labels)
+```
+
+<ParamField path="X" type="array-like, shape (n_samples, n_features)">
+  A list of n_features-dimensional data points. Each row corresponds to a single data point.
+</ParamField>
+
+<ParamField path="labels" type="array-like, shape (n_samples,)">
+  Predicted labels for each sample
+</ParamField>
+
+<ResponseField name="score" type="float">
+  The resulting Calinski-Harabasz score. Higher values indicate better-defined clusters.
+</ResponseField>
+
+#### Example
+
+```python
+import numpy as np
+from autogoal.ml.metrics import calinski_harabasz_score
+
+# Sample clustered data
+X = np.array([[1, 2], [1, 4], [1, 0],
+              [10, 2], [10, 4], [10, 0]])
+labels = [0, 0, 0, 1, 1, 1]
+
+score = calinski_harabasz_score(X, labels)
+print(f"Calinski-Harabasz Score: {score}")
+```
+
+<Note>
+The score is defined as the ratio between the within-cluster dispersion and the between-cluster dispersion. See [Calinski and Harabasz, 1974](https://www.tandfonline.com/doi/abs/10.1080/03610927408827101) for more details.
+</Note>
+
+### silhouette_score
+
+Calculates the silhouette score for a given set of data and cluster labels. The Silhouette Coefficient is a measure of how well samples are clustered with samples that are similar to themselves.
+
+```python
+from autogoal.ml.metrics import silhouette_score
+
+score = silhouette_score(X, labels)
+```
+
+<ParamField path="X" type="array-like, shape (n_samples, n_features)">
+  A numpy array containing the data to be clustered
+</ParamField>
+
+<ParamField path="labels" type="array-like, shape (n_samples,)">
+  Labels assigned to each data point by a clustering algorithm
+</ParamField>
+
+<ResponseField name="score" type="float">
+  The mean silhouette score for the clustering. Values range from -1 to 1, where:
+  - 1: Samples are far from neighboring clusters
+  - 0: Samples are on or very close to the decision boundary between clusters
+  - -1: Samples may have been assigned to the wrong cluster
+</ResponseField>
+
+#### Example
+
+```python
+import numpy as np
+from autogoal.ml.metrics import silhouette_score
+
+# Create sample data
+X = np.array([[1, 2], [1.5, 1.8], [5, 8],
+              [8, 8], [1, 0.6], [9, 11]])
+labels = [0, 0, 1, 1, 0, 1]
+
+score = silhouette_score(X, labels)
+print(f"Silhouette Score: {score}")
+```
+
+<Tip>
+Clustering models with a high Silhouette Coefficient are said to be dense (samples in the same cluster are similar to each other) and well separated (samples in different clusters are not very similar to each other).
+</Tip>
+
+## Fitness Functions
+
+### supervised_fitness_fn_moo
+
+Returns a fitness function for multi-objective optimization problems in supervised learning.
+
+```python
+from autogoal.ml.metrics import supervised_fitness_fn_moo, accuracy
+
+objectives = [accuracy]  # Can include multiple metrics
+fitness_fn = supervised_fitness_fn_moo(objectives)
+```
+
+<ParamField path="objectives" type="list">
+  A list of objective functions to optimize. Each function should take (y_true, y_pred) as arguments.
+</ParamField>
+
+<ResponseField name="fitness_fn" type="function">
+  A function that takes a pipeline, dataset (X, y), and optional arguments, and returns a tuple of scores for each objective function.
+</ResponseField>
+
+#### Function Parameters
+
+The returned fitness function accepts:
+
+<ParamField path="pipeline" type="object">
+  The machine learning pipeline to evaluate
+</ParamField>
+
+<ParamField path="X" type="array-like">
+  Input features for training and evaluation
+</ParamField>
+
+<ParamField path="y" type="array-like">
+  Target labels for training and evaluation
+</ParamField>
+
+<ParamField path="validation_split" type="float" default="0.3">
+  Proportion of data to use for validation (0.0 to 1.0)
+</ParamField>
+
+<ParamField path="cross_validation_steps" type="int" default="3">
+  Number of cross-validation iterations to perform
+</ParamField>
+
+<ParamField path="cross_validation" type="str" default="median">
+  Aggregation method for cross-validation scores. Options: "mean" or "median"
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.ml.metrics import supervised_fitness_fn_moo, accuracy
+import numpy as np
+
+# Define multiple objectives
+def custom_metric(y_true, y_pred):
+    # Custom evaluation logic
+    return np.mean(y_true == y_pred)
+
+objectives = [accuracy, custom_metric]
+fitness_fn = supervised_fitness_fn_moo(objectives)
+
+# Use in optimization
+# scores = fitness_fn(pipeline, X_train, y_train, validation_split=0.2)
+# Returns tuple of scores: (accuracy_score, custom_metric_score)
+```
+
+### unsupervised_fitness_fn_moo
+
+Returns a fitness function for unsupervised multi-objective optimization.
+
+```python
+from autogoal.ml.metrics import unsupervised_fitness_fn_moo
+from autogoal.ml.metrics import silhouette_score, calinski_harabasz_score
+
+objectives = [silhouette_score, calinski_harabasz_score]
+fitness_fn = unsupervised_fitness_fn_moo(objectives)
+```
+
+<ParamField path="objectives" type="list">
+  A list of objective functions to evaluate the performance of the unsupervised model. Each function should take (X, labels) as arguments.
+</ParamField>
+
+<ResponseField name="fitness_fn" type="function">
+  A fitness function that takes a pipeline and data X as inputs, runs the pipeline on X, and returns a tuple of objective scores.
+</ResponseField>
+
+#### Function Parameters
+
+The returned fitness function accepts:
+
+<ParamField path="pipeline" type="object">
+  An unsupervised learning model that implements fit and predict methods
+</ParamField>
+
+<ParamField path="X" type="array-like, shape (n_samples, n_features)">
+  The input data to train the model
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.ml.metrics import unsupervised_fitness_fn_moo
+from autogoal.ml.metrics import silhouette_score, calinski_harabasz_score
+import numpy as np
+
+# Define objectives for clustering
+objectives = [silhouette_score, calinski_harabasz_score]
+fitness_function = unsupervised_fitness_fn_moo(objectives)
+
+# Use with a clustering pipeline
+# scores = fitness_function(pipeline, X)
+# Returns: (silhouette_score, calinski_harabasz_score)
+```
+
+## Deprecated Functions
+
+<Warning>
+The following functions are deprecated and will be removed in future versions. Please use the multi-objective optimization versions instead.
+</Warning>
+
+### supervised_fitness_fn (Deprecated)
+
+<Note>
+**Deprecated:** Use `supervised_fitness_fn_moo()` instead.
+
+This function wraps a single score metric function to create a fitness function with cross-validation.
+</Note>
+
+### unsupervised_fitness_fn (Deprecated)
+
+<Note>
+**Deprecated:** Use `unsupervised_fitness_fn_moo()` instead.
+
+This function wraps a single score metric function to create an unsupervised fitness function.
+</Note>
+
+## Utility Functions
+
+### find_metric
+
+Finds a registered metric function that matches the given type signature.
+
+```python
+from autogoal.ml.metrics import find_metric
+
+metric = find_metric(*types)
+```
+
+<ParamField path="types" type="tuple">
+  Type annotations to match against registered metrics
+</ParamField>
+
+<ResponseField name="metric_func" type="function">
+  The first metric function that matches the provided type signature
+</ResponseField>
+
+<Warning>
+Raises `ValueError` if no metric is found matching the provided types.
+</Warning>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="AutoML API" icon="brain" href="/api/automl">
+    Complete AutoML class reference
+  </Card>
+  
+  <Card title="Search" icon="magnifying-glass" href="/api/search/overview">
+    Learn about AutoML search strategies
+  </Card>
+</CardGroup>

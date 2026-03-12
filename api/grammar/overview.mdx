@@ -1,0 +1,230 @@
+---
+title: 'Grammar & Sampling Overview'
+description: 'Overview of AutoGOAL grammar and sampling modules for defining search spaces'
+---
+
+## Introduction
+
+AutoGOAL's grammar module provides powerful tools for defining and sampling from complex search spaces. It implements two main approaches:
+
+<CardGroup cols={2}>
+  <Card title="Context-Free Grammars" icon="sitemap" href="/api/grammar/cfg">
+    Define search spaces using production rules and annotated classes
+  </Card>
+  <Card title="Graph Grammars" icon="network-wired" href="/api/grammar/graph">
+    Define search spaces as graphs with production rules for node expansion
+  </Card>
+</CardGroup>
+
+## Key Concepts
+
+### Grammar Base Class
+
+All grammar implementations inherit from the base `Grammar` class, which provides:
+
+- **Sampling**: Generate random instances from the defined search space
+- **Iteration control**: Limit complexity with maximum iterations
+- **Sampler integration**: Use custom samplers for reproducible results
+
+### Context-Free Grammars (CFG)
+
+Context-free grammars describe search spaces through production rules. They're ideal for:
+
+- Defining hyperparameter spaces for machine learning algorithms
+- Creating hierarchies of alternative implementations
+- Automatically generating configurations from annotated classes
+
+<CodeGroup>
+```python Simple Example
+from autogoal.grammar import generate_cfg, DiscreteValue, ContinuousValue
+
+class LogisticRegression:
+    def __init__(
+        self,
+        C: ContinuousValue(0.1, 10.0),
+        max_iter: DiscreteValue(100, 1000)
+    ):
+        self.C = C
+        self.max_iter = max_iter
+
+# Generate grammar from annotated class
+grammar = generate_cfg(LogisticRegression)
+
+# Sample random instances
+model = grammar.sample()
+print(f"C={model.C}, max_iter={model.max_iter}")
+```
+
+```python Union Types
+from autogoal.grammar import generate_cfg, Union
+
+class SVM:
+    def __init__(self, kernel: CategoricalValue("linear", "rbf")):
+        self.kernel = kernel
+
+class RandomForest:
+    def __init__(self, n_estimators: DiscreteValue(10, 100)):
+        self.n_estimators = n_estimators
+
+# Create a union of multiple algorithms
+Classifier = Union("Classifier", SVM, RandomForest)
+grammar = generate_cfg(Classifier)
+
+# Sample will randomly choose SVM or RandomForest
+model = grammar.sample()
+```
+</CodeGroup>
+
+### Graph Grammars
+
+Graph grammars represent search spaces as directed graphs where nodes can be expanded using production rules. They're useful for:
+
+- Building neural network architectures
+- Creating complex pipelines with multiple paths
+- Modeling workflows with branching and merging
+
+```python
+from autogoal.grammar import GraphGrammar, Path, Block, Epsilon
+
+# Define a simple graph grammar
+grammar = GraphGrammar(start="Input")
+
+# Add production rules
+grammar.add("Input", Path("Normalize", "Model"))
+grammar.add("Model", Block("Linear", "ReLU", "Dropout"))
+
+# Sample generates a concrete graph
+graph = grammar.sample()
+```
+
+## Core Components
+
+### Value Types
+
+Use these annotation types to define parameter spaces:
+
+<ResponseField name="DiscreteValue" type="class">
+  Integer values in a specified range
+  ```python
+  n_layers: DiscreteValue(1, 5)  # 1, 2, 3, 4, or 5
+  ```
+</ResponseField>
+
+<ResponseField name="ContinuousValue" type="class">
+  Float values in a specified range
+  ```python
+  learning_rate: ContinuousValue(0.001, 0.1)  # Any float in [0.001, 0.1]
+  ```
+</ResponseField>
+
+<ResponseField name="CategoricalValue" type="class">
+  One value from a discrete set
+  ```python
+  optimizer: CategoricalValue("adam", "sgd", "rmsprop")
+  ```
+</ResponseField>
+
+<ResponseField name="BooleanValue" type="class">
+  True or False
+  ```python
+  use_bias: BooleanValue()
+  ```
+</ResponseField>
+
+### Composite Types
+
+<ResponseField name="Union" type="class">
+  Choose one type from multiple alternatives
+  ```python
+  Model = Union("Model", LinearModel, TreeModel, NeuralNet)
+  ```
+</ResponseField>
+
+<ResponseField name="Subset" type="class">
+  Select a subset of items from a collection
+  ```python
+  features: Subset("Features", "age", "income", "education", allow_empty=False)
+  ```
+</ResponseField>
+
+## Sampling
+
+All grammars support sampling with optional parameters:
+
+<ParamField path="max_iterations" type="int" default="100">
+  Maximum number of production rule applications to prevent infinite expansion
+</ParamField>
+
+<ParamField path="sampler" type="Sampler" default="None">
+  Custom sampler for reproducible results. If None, uses a default Sampler instance.
+</ParamField>
+
+```python
+from autogoal.sampling import Sampler
+
+# Use custom sampler for reproducibility
+sampler = Sampler(random_state=42)
+instance = grammar.sample(sampler=sampler, max_iterations=50)
+```
+
+## Common Patterns
+
+### Nested Classes
+
+Classes can reference other annotated classes:
+
+```python
+class Preprocessor:
+    def __init__(self, scale: BooleanValue()):
+        self.scale = scale
+
+class Pipeline:
+    def __init__(
+        self,
+        preprocessor: Preprocessor,
+        model: Union("Model", SVM, RandomForest)
+    ):
+        self.preprocessor = preprocessor
+        self.model = model
+
+grammar = generate_cfg(Pipeline)
+pipeline = grammar.sample()
+```
+
+### Using Registries
+
+Pre-register classes to avoid redundant CFG generation:
+
+```python
+from autogoal.grammar import generate_cfg
+
+registry = [SVM, RandomForest, LogisticRegression]
+grammar = generate_cfg(Pipeline, registry=registry)
+```
+
+### Grammar Inspection
+
+View the structure of generated grammars:
+
+```python
+grammar = generate_cfg(MyClass)
+print(grammar)  # Prints production rules in BNF-like format
+```
+
+Output:
+```
+<MyClass>   := MyClass (param1=<MyClass_param1>, param2=<MyClass_param2>)
+<MyClass_param1> := discrete (min=1, max=10)
+<MyClass_param2> := categorical (options=['a', 'b', 'c'])
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Context-Free Grammar API" icon="sitemap" href="/api/grammar/cfg">
+    Detailed API reference for CFG classes and functions
+  </Card>
+  <Card title="Graph Grammar API" icon="network-wired" href="/api/grammar/graph">
+    Detailed API reference for graph grammar classes
+  </Card>
+</CardGroup>

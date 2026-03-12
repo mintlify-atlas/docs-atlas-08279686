@@ -1,0 +1,382 @@
+---
+title: Classification with AutoML
+description: Use AutoML to automatically build classification models for categorical prediction tasks
+---
+
+## Overview
+
+Classification is one of the most common machine learning tasks, where the goal is to predict categorical labels from input data. AutoGOAL's AutoML class can automatically discover and optimize classification pipelines for various types of data.
+
+## Classification Problem Types
+
+AutoML supports multiple types of classification problems:
+
+<CardGroup cols={2}>
+  <Card title="Binary Classification" icon="binary">
+    Predicting between two classes (e.g., spam/not spam, positive/negative)
+  </Card>
+  
+  <Card title="Multi-class Classification" icon="list">
+    Predicting among three or more mutually exclusive classes
+  </Card>
+  
+  <Card title="Text Classification" icon="comment">
+    Categorizing text documents or sentences into predefined classes
+  </Card>
+  
+  <Card title="Image Classification" icon="image">
+    Assigning labels to images based on their content
+  </Card>
+</CardGroup>
+
+## Basic Classification Example
+
+Here's a complete example using the Cars dataset for multi-class classification:
+
+```python
+from autogoal.datasets import cars
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+from sklearn.model_selection import train_test_split
+
+# Load the dataset
+X, y = cars.load()
+
+# Split into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# Create AutoML instance for classification
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=100,
+)
+
+# Train the model
+automl.fit(X_train, y_train)
+
+# Make predictions
+y_pred = automl.predict(X_test)
+
+# Evaluate performance
+scores = automl.score(X_test, y_test)
+print(f"Test scores: {scores}")
+```
+
+## Semantic Types for Classification
+
+For classification tasks, you need to specify the appropriate semantic types:
+
+### Input Types
+
+<CodeGroup>
+```python Numeric Data (Dense Matrix)
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+)
+```
+
+```python Text Data
+from autogoal.kb import Seq, Sentence, Supervised, VectorCategorical
+
+automl = AutoML(
+    input=(Seq[Sentence], Supervised[VectorCategorical]),
+    output=VectorCategorical,
+)
+```
+
+```python Sparse Matrices
+from autogoal.kb import MatrixContinuousSparse, Supervised, VectorCategorical
+
+automl = AutoML(
+    input=(MatrixContinuousSparse, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+)
+```
+</CodeGroup>
+
+<Note>
+  The `Supervised[VectorCategorical]` annotation indicates that you're providing labeled training data for supervised learning.
+</Note>
+
+## Text Classification Example
+
+Here's an example for sentiment analysis using the movie reviews dataset:
+
+```python
+from autogoal.datasets import movie_reviews
+from autogoal.kb import Seq, Sentence, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+from autogoal.search import ConsoleLogger
+
+# Load movie reviews data
+sentences, labels = movie_reviews.load(max_examples=1000)
+
+# Create AutoML for text classification
+automl = AutoML(
+    input=(Seq[Sentence], Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    search_iterations=50,
+)
+
+# Fit the model
+automl.fit(sentences, labels, logger=ConsoleLogger())
+
+# Make predictions on new text
+new_reviews = [
+    "This movie was absolutely amazing!",
+    "Terrible film, waste of time."
+]
+predictions = automl.predict(new_reviews)
+print(f"Predictions: {predictions}")
+```
+
+## Custom Objectives for Classification
+
+You can specify different metrics to optimize based on your problem requirements:
+
+<CodeGroup>
+```python Accuracy (Default)
+from autogoal.ml import AutoML
+from autogoal.ml.metrics import accuracy
+
+automl = AutoML(
+    objectives=accuracy,  # Default metric
+    # ... other parameters
+)
+```
+
+```python F1 Score (Balanced)
+from sklearn.metrics import f1_score
+
+automl = AutoML(
+    objectives=f1_score,
+    # ... other parameters
+)
+```
+
+```python Balanced Accuracy
+from sklearn.metrics import balanced_accuracy_score
+
+automl = AutoML(
+    objectives=balanced_accuracy_score,
+    # ... other parameters
+)
+```
+
+```python Multiple Objectives
+from sklearn.metrics import f1_score, precision_score, recall_score
+
+# Multi-objective optimization
+automl = AutoML(
+    objectives=(f1_score, precision_score, recall_score),
+    # ... other parameters
+)
+```
+</CodeGroup>
+
+<Warning>
+  When using custom metrics from scikit-learn, ensure they are compatible with your problem type (e.g., use `f1_score` with `average` parameter for multi-class problems).
+</Warning>
+
+## Advanced Classification Configuration
+
+Here's a more advanced example with fine-tuned parameters:
+
+```python
+from autogoal.ml import AutoML
+from autogoal.search import PESearch, RichLogger
+from sklearn.metrics import f1_score
+
+# Create a highly configured classifier
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    
+    # Search configuration
+    search_algorithm=PESearch,
+    search_iterations=1000,
+    
+    # Objective and evaluation
+    objectives=f1_score,
+    validation_split=0.25,
+    cross_validation_steps=5,
+    cross_validation="median",
+    
+    # Resource constraints
+    pop_size=100,
+    evaluation_timeout=600,  # 10 minutes per pipeline
+    memory_limit=8 * 1024**3,  # 8 GB RAM
+    
+    # Error handling and reproducibility
+    errors="warn",
+    random_state=42,
+)
+
+# Train with rich logging
+automl.fit(X_train, y_train, logger=RichLogger())
+
+# Evaluate
+score = automl.score(X_test, y_test)
+print(f"Final test score: {score}")
+print(f"Best pipeline: {automl.best_pipelines_[0]}")
+```
+
+## Handling Imbalanced Classes
+
+For imbalanced classification problems, consider these approaches:
+
+<Steps>
+  <Step title="Use Appropriate Metrics">
+    Use `f1_score`, `balanced_accuracy_score`, or `roc_auc_score` instead of plain accuracy.
+    
+    ```python
+    from sklearn.metrics import balanced_accuracy_score
+    
+    automl = AutoML(
+        objectives=balanced_accuracy_score,
+        # ...
+    )
+    ```
+  </Step>
+  
+  <Step title="Increase Cross-Validation Steps">
+    More cross-validation iterations provide more robust evaluation.
+    
+    ```python
+    automl = AutoML(
+        cross_validation_steps=10,  # More splits
+        cross_validation="median",   # Robust aggregation
+        # ...
+    )
+    ```
+  </Step>
+  
+  <Step title="Allow More Search Iterations">
+    Give the algorithm more time to find pipelines that handle imbalance well.
+    
+    ```python
+    automl = AutoML(
+        search_iterations=500,  # More exploration
+        # ...
+    )
+    ```
+  </Step>
+</Steps>
+
+## Real-World Classification Example
+
+Here's a complete example using the German Credit dataset:
+
+```python
+from autogoal.datasets import german_credit
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+from autogoal.ml import AutoML
+from autogoal.search import RichLogger
+from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.model_selection import train_test_split
+
+# Load credit risk data
+X, y = german_credit.load()
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, stratify=y, random_state=42
+)
+
+# Configure AutoML for credit risk classification
+automl = AutoML(
+    input=(MatrixContinuousDense, Supervised[VectorCategorical]),
+    output=VectorCategorical,
+    
+    # Optimize for precision (minimize false positives in credit risk)
+    objectives=precision_score,
+    
+    # Robust evaluation for imbalanced data
+    validation_split=0.3,
+    cross_validation_steps=5,
+    cross_validation="median",
+    
+    # Search configuration
+    search_iterations=200,
+    random_state=42,
+    errors="warn",
+)
+
+# Train the model
+print("Training credit risk classifier...")
+automl.fit(X_train, y_train, logger=RichLogger())
+
+# Evaluate on test set
+test_score = automl.score(X_test, y_test)
+print(f"\nTest set precision: {test_score}")
+
+# Get predictions
+y_pred = automl.predict(X_test)
+
+# Show the best pipeline found
+print(f"\nBest pipeline:\n{automl.best_pipelines_[0]}")
+```
+
+## Saving and Loading Classification Models
+
+After training, you can save your classification model for later use:
+
+```python
+from pathlib import Path
+
+# Save the trained model
+export_path = Path("./my_classifier")
+automl.folder_save(export_path)
+
+# Later, load the model
+from autogoal.ml import AutoML
+
+loaded_automl = AutoML.folder_load(export_path)
+
+# Use the loaded model for predictions
+predictions = loaded_automl.predict(X_new)
+```
+
+## Tips for Better Classification Results
+
+<Note>
+  **Increase search iterations**: More iterations allow AutoML to explore more pipeline configurations. Start with 100-200 for quick experiments, use 500-1000 for production models.
+</Note>
+
+<Note>
+  **Choose the right metric**: For imbalanced datasets, use F1-score or balanced accuracy instead of plain accuracy.
+</Note>
+
+<Note>
+  **Set resource limits**: Always set `evaluation_timeout` and `memory_limit` to prevent runaway pipelines from consuming all resources.
+</Note>
+
+<Note>
+  **Use cross-validation**: Multiple cross-validation steps (3-10) provide more reliable performance estimates.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Regression Tasks" icon="chart-line" href="/automl/regression">
+    Learn about using AutoML for regression problems
+  </Card>
+  
+  <Card title="Custom Pipelines" icon="diagram-project" href="/automl/custom-pipelines">
+    Build custom pipelines for more control
+  </Card>
+  
+  <Card title="Semantic Types" icon="tags" href="/concepts/semantic-types">
+    Deep dive into semantic type system
+  </Card>
+  
+  <Card title="Search Algorithms" icon="magnifying-glass" href="/concepts/optimization">
+    Understand pipeline search strategies
+  </Card>
+</CardGroup>

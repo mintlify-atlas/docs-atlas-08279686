@@ -1,0 +1,329 @@
+---
+title: Installation
+description: Install AutoGOAL and its dependencies
+---
+
+AutoGOAL can be installed in multiple ways depending on your needs. This guide covers all installation methods and dependency management.
+
+## Quick Install
+
+The fastest way to get started:
+
+```bash
+pip install autogoal
+```
+
+This installs the core library, but you'll need additional dependencies to use machine learning algorithms.
+
+<Warning>
+  The core installation alone won't run most examples. You'll need to install optional dependencies for machine learning functionality.
+</Warning>
+
+## Recommended: Docker Installation
+
+The easiest way to get AutoGOAL with all dependencies is using Docker:
+
+<Steps>
+  <Step title="Pull the Docker image">
+    Download the development Docker image (note: this image is somewhat large):
+
+    ```bash
+    docker pull autogoal/autogoal
+    ```
+
+    <Note>
+      The Docker image includes all dependencies and is ready to use immediately.
+    </Note>
+  </Step>
+
+  <Step title="Run interactive console">
+    Fire up a console and use AutoGOAL interactively:
+
+    ```bash
+    docker run -it autogoal/autogoal
+    ```
+  </Step>
+
+  <Step title="Run the demo app (optional)">
+    Launch the interactive demo application:
+
+    ```bash
+    docker run -p 8501:8501 autogoal/autogoal
+    ```
+
+    Then navigate to [localhost:8501](http://localhost:8501) in your browser.
+  </Step>
+</Steps>
+
+<Tip>
+  The Docker image contains the latest development version from the `main` branch, which may have more features (and potentially more bugs) than the pip release.
+</Tip>
+
+## Installation Methods
+
+<CodeGroup>
+```bash Core Only
+# Minimal installation - core library only
+pip install autogoal
+```
+
+```bash Full Installation
+# Complete installation with all ML dependencies
+pip install autogoal[contrib]
+```
+
+```bash Docker
+# Pull the development image with everything included
+docker pull autogoal/autogoal
+```
+</CodeGroup>
+
+## Python Version Requirements
+
+AutoGOAL requires **Python 3.9.13 or higher** (but below 3.11):
+
+```bash
+python --version  # Should be >= 3.9.13 and < 3.11
+```
+
+<Warning>
+  Python 3.11+ is not yet supported. Please use Python 3.9 or 3.10.
+</Warning>
+
+## Dependencies
+
+### Core Dependencies
+
+These are installed automatically with `pip install autogoal`:
+
+- **numpy** - Numerical computing
+- **pandas** - Data manipulation
+- **scipy** - Scientific computing
+- **networkx** - Graph algorithms
+- **psutil** - System monitoring
+- **PyYAML** - Configuration files
+- **typer** - CLI interface
+- **rich** - Terminal formatting
+- **tqdm** - Progress bars
+- **enlighten** - Advanced progress tracking
+
+And several others for core functionality.
+
+### Optional Dependencies (Machine Learning)
+
+To use AutoGOAL's machine learning capabilities, install the contrib dependencies:
+
+```bash
+pip install autogoal[contrib]
+```
+
+This includes:
+
+- **scikit-learn** - Traditional ML algorithms
+- **keras** - Neural networks
+- **nltk** - Natural language processing
+- **gensim** - Topic modeling and word embeddings
+- **spacy** - Advanced NLP
+- **transformers** - Pre-trained language models
+- **seqlearn** - Sequence learning
+- **sklearn-crfsuite** - Conditional Random Fields
+
+And more!
+
+### Fine-Grained Dependency Control
+
+You can hand-pick specific dependencies if you don't want everything:
+
+<CodeGroup>
+```bash Scikit-learn
+pip install autogoal[sklearn]
+```
+
+```bash Keras/Deep Learning
+pip install autogoal[keras]
+```
+
+```bash NLP
+pip install autogoal[nltk]
+```
+
+```bash All ML Tools
+pip install autogoal[contrib]
+```
+</CodeGroup>
+
+## Why Separate Dependencies?
+
+AutoGOAL's core doesn't depend on any specific ML framework. This design offers several benefits:
+
+<CardGroup cols={2}>
+  <Card title="Flexibility" icon="wand-magic-sparkles">
+    Use AutoGOAL with your preferred frameworks - keras, pytorch, sklearn, or your own custom classes
+  </Card>
+  <Card title="Lightweight" icon="feather">
+    No forced dependencies - install only what you need for your specific use case
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    Choose your own versions of frameworks like tensorflow or pytorch
+  </Card>
+  <Card title="Beyond ML" icon="rocket">
+    Use AutoGOAL for any optimization problem, not just machine learning
+  </Card>
+</CardGroup>
+
+## Verifying Your Installation
+
+Test your installation with this simple script:
+
+```python
+import autogoal
+print(f"AutoGOAL version: {autogoal.__version__}")
+
+# Test with a simple example
+from autogoal.datasets import cars
+from autogoal.ml import AutoML
+from autogoal.kb import MatrixContinuousDense, Supervised, VectorCategorical
+
+print("Loading dataset...")
+X, y = cars.load()
+print(f"Dataset loaded: {X.shape[0]} samples, {X.shape[1]} features")
+
+print("AutoGOAL is ready to use!")
+```
+
+<Note>
+  If you get import errors for `autogoal.ml`, you need to install the contrib dependencies.
+</Note>
+
+## Handling Missing Dependencies
+
+AutoGOAL provides helpful error messages when dependencies are missing:
+
+```python
+from autogoal.contrib.keras import KerasClassifier
+```
+
+If keras isn't installed, you'll see:
+
+```
+(!) Code in `autogoal.contrib.keras` requires `keras` installed.
+(!) Run `pip install -U autogoal[keras]` to get it.
+```
+
+Simply run the suggested command to install the required dependencies.
+
+## Docker Setup Details
+
+If you prefer Docker, here are some useful commands:
+
+<CodeGroup>
+```bash Interactive Shell
+# Start an interactive Python shell
+docker run -it autogoal/autogoal python
+```
+
+```bash Run Script
+# Run a Python script
+docker run -v $(pwd):/workspace autogoal/autogoal python /workspace/your_script.py
+```
+
+```bash Jupyter Notebook
+# Start Jupyter Lab
+docker run -p 8888:8888 autogoal/autogoal jupyter lab --ip=0.0.0.0
+```
+
+```bash Documentation
+# Serve documentation locally
+docker run -p 8000:8000 autogoal/autogoal mkdocs serve -a 0.0.0.0:8000
+```
+</CodeGroup>
+
+## Using the CLI
+
+After installation, AutoGOAL provides a command-line interface:
+
+```bash
+autogoal --help
+```
+
+Use the CLI to:
+- Train and use AutoML models
+- Download datasets
+- Inspect contrib libraries
+
+All without writing a single line of code!
+
+## Development Installation
+
+If you want to contribute to AutoGOAL or modify the source code:
+
+```bash
+# Clone the repository
+git clone https://github.com/autogoal/autogoal.git
+cd autogoal
+
+# Install in development mode
+pip install -e .
+
+# Or with all dependencies
+pip install -e .[contrib]
+```
+
+<Tip>
+  For development, we recommend using the Docker development image which includes all development dependencies.
+</Tip>
+
+## Troubleshooting
+
+### ImportError: No module named 'autogoal'
+
+Make sure AutoGOAL is installed:
+```bash
+pip list | grep autogoal
+```
+
+If not listed, reinstall:
+```bash
+pip install autogoal
+```
+
+### Missing ML Dependencies
+
+If you get errors about missing sklearn, keras, etc.:
+```bash
+pip install autogoal[contrib]
+```
+
+### Python Version Issues
+
+Check your Python version:
+```bash
+python --version
+```
+
+AutoGOAL requires Python 3.9.13+ but below 3.11.
+
+### Docker Issues
+
+If Docker pull fails, ensure Docker is properly installed and running:
+```bash
+docker --version
+docker ps
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Build your first AutoGOAL pipeline in 5 minutes
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Learn about AutoGOAL's architecture and design
+  </Card>
+  <Card title="AutoML Guide" icon="brain" href="/automl/overview">
+    Explore AutoML features and configuration
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/automl">
+    Dive into the complete API documentation
+  </Card>
+</CardGroup>

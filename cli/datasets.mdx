@@ -1,0 +1,478 @@
+---
+title: Managing Datasets
+description: Download, list, and manage training datasets with autogoal data commands
+---
+
+## Overview
+
+AutoGOAL provides a curated collection of datasets for machine learning experiments. The `autogoal data` command group lets you download, list, and manage these datasets directly from the command line.
+
+Datasets are stored in `~/.autogoal/data` and can be used for training AutoML models or experimenting with different algorithms.
+
+## Available Commands
+
+<CardGroup cols={3}>
+  <Card title="List Datasets" icon="list">
+    View all available datasets
+  </Card>
+  <Card title="Download Dataset" icon="download">
+    Download specific datasets
+  </Card>
+  <Card title="Generate Data" icon="dice">
+    Create random datasets
+  </Card>
+</CardGroup>
+
+## Listing Datasets
+
+View all datasets available in the AutoGOAL repository.
+
+### Command
+
+```bash
+autogoal data list
+```
+
+### Example Output
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 📚 Dataset           ┃ 💾 ┃ 🔗 URL                                    ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ cars                 │ ✔️  │ https://github.com/autogoal/datasets/... │
+│ dorothea             │    │ https://github.com/autogoal/datasets/... │
+│ gisette              │ ✔️  │ https://github.com/autogoal/datasets/... │
+│ movie_reviews        │ ✔️  │ https://github.com/autogoal/datasets/... │
+│ haha                 │    │ https://github.com/autogoal/datasets/... │
+│ meddocan             │    │ https://github.com/autogoal/datasets/... │
+└──────────────────────┴────┴───────────────────────────────────────────┘
+```
+
+**Output columns:**
+- **Dataset name**: Identifier to use with download command
+- **💾 indicator**: ✔️ if already downloaded locally
+- **URL**: Link to dataset source repository
+
+<Note>
+Datasets marked with ✔️ are already available on your system and don't need to be re-downloaded.
+</Note>
+
+## Downloading Datasets
+
+Download one or more datasets to your local system.
+
+### Command
+
+```bash
+autogoal data download <dataset_name> [<dataset_name> ...]
+```
+
+<ParamField path="datasets" type="List[string]" required>
+  Names of datasets to download. Use `all` to download every available dataset
+</ParamField>
+
+### Example Usage
+
+#### Download Single Dataset
+
+```bash
+autogoal data download movie_reviews
+```
+
+**Output:**
+```
+Downloading movie_reviews.zip
+100%|████████████████████| 5.23M/5.23M [00:03<00:00, 1.52MB/s]
+Extracting to ~/.autogoal/data/movie_reviews
+```
+
+#### Download Multiple Datasets
+
+```bash
+autogoal data download cars gisette movie_reviews
+```
+
+This downloads three datasets sequentially:
+1. cars
+2. gisette  
+3. movie_reviews
+
+#### Download All Datasets
+
+```bash
+autogoal data download all
+```
+
+<Warning>
+Downloading all datasets requires significant disk space (several GB) and may take considerable time depending on your internet connection.
+</Warning>
+
+### Download Behavior
+
+- **Automatic unpacking**: Downloaded ZIP files are automatically extracted
+- **Skip existing**: Already downloaded datasets are skipped
+- **Progress bars**: Real-time download progress with speed and size information
+- **Atomic operations**: Partial downloads are cleaned up on failure
+
+## Dataset Storage
+
+### Storage Location
+
+All datasets are stored in:
+
+```
+~/.autogoal/data/
+├── dataset1/
+│   └── [dataset files]
+├── dataset2/
+│   └── [dataset files]
+└── datasets.json (metadata cache)
+```
+
+### Checking Storage
+
+View downloaded datasets:
+
+```bash
+ls ~/.autogoal/data/
+```
+
+Check disk space used:
+
+```bash
+du -sh ~/.autogoal/data/
+```
+
+### Metadata Cache
+
+The `datasets.json` file caches the list of available datasets:
+
+- **Online mode**: Updates from GitHub when internet is available
+- **Offline mode**: Uses cached version if no connection
+- **Auto-refresh**: Updates on each `data list` command
+
+<Tip>
+If you're offline, you can still list datasets and use previously downloaded ones. The CLI will use the cached metadata.
+</Tip>
+
+## Using Downloaded Datasets
+
+### In Python Code
+
+Access downloaded datasets in your Python scripts:
+
+```python
+from autogoal.datasets import datapath
+
+# Get path to dataset
+path = datapath("movie_reviews")
+print(path)  # PosixPath('/home/user/.autogoal/data/movie_reviews')
+
+# Load dataset
+from autogoal.datasets import movie_reviews
+X_train, y_train, X_test, y_test = movie_reviews.load()
+```
+
+### With CLI Commands
+
+Use datasets for training:
+
+```bash
+# Download dataset
+autogoal data download cars
+
+# Create CSV from dataset (if applicable)
+# Then train with it
+autogoal ml fit ~/.autogoal/data/cars/cars.csv --target class
+```
+
+## Generating Random Datasets
+
+Create synthetic datasets for testing and experimentation.
+
+### Command
+
+```bash
+autogoal data gen
+```
+
+<Note>
+This command is currently a placeholder. Full random dataset generation functionality is planned for future releases.
+</Note>
+
+### Planned Features
+
+Future versions will support:
+- Generating classification datasets with configurable classes
+- Creating regression datasets with specified distributions
+- Customizing dataset size, features, and noise levels
+- Exporting to CSV/JSON formats
+
+## Dataset Information
+
+### Common AutoGOAL Datasets
+
+<CodeGroup>
+```bash Cars
+# Classic car evaluation dataset
+autogoal data download cars
+
+# Type: Classification
+# Features: 6 categorical attributes
+# Instances: ~1700
+# Classes: 4 (unacc, acc, good, vgood)
+```
+
+```bash Movie Reviews
+# Sentiment analysis dataset
+autogoal data download movie_reviews
+
+# Type: Text Classification
+# Features: Movie review text
+# Instances: 2000
+# Classes: 2 (positive, negative)
+```
+
+```bash DOROTHEA
+# High-dimensional drug discovery dataset
+autogoal data download dorothea
+
+# Type: Classification
+# Features: 100,000 binary features
+# Instances: 1150
+# Classes: 2
+```
+
+```bash GISETTE
+# Handwritten digit recognition
+autogoal data download gisette
+
+# Type: Classification  
+# Features: 5000 numeric features
+# Instances: 7000
+# Classes: 2 (digit 4 vs 9)
+```
+</CodeGroup>
+
+### Dataset Categories
+
+AutoGOAL datasets cover various domains:
+
+- **Tabular**: Structured data with numeric/categorical features
+- **Text**: Natural language processing tasks
+- **Image**: Computer vision problems (planned)
+- **Time Series**: Sequential data (planned)
+- **Multimodal**: Combined data types (planned)
+
+## Advanced Usage
+
+### Batch Download Script
+
+Download specific datasets for a project:
+
+```bash
+#!/bin/bash
+# setup-project-data.sh
+
+DATASETS=("cars" "movie_reviews" "gisette")
+
+echo "Setting up project datasets..."
+
+for dataset in "${DATASETS[@]}"; do
+    echo "Downloading $dataset..."
+    autogoal data download "$dataset"
+done
+
+echo "All datasets ready!"
+autogoal data list
+```
+
+### Verify Downloads
+
+Check that datasets are properly downloaded:
+
+```bash
+#!/bin/bash
+# verify-datasets.sh
+
+DATASET="$1"
+DATASET_PATH="$HOME/.autogoal/data/$DATASET"
+
+if [ -d "$DATASET_PATH" ]; then
+    echo "✅ Dataset '$DATASET' is available"
+    echo "Location: $DATASET_PATH"
+    echo "Size: $(du -sh "$DATASET_PATH" | cut -f1)"
+    echo "Files: $(find "$DATASET_PATH" -type f | wc -l)"
+else
+    echo "❌ Dataset '$DATASET' not found"
+    echo "Run: autogoal data download $DATASET"
+    exit 1
+fi
+```
+
+Usage:
+```bash
+chmod +x verify-datasets.sh
+./verify-datasets.sh movie_reviews
+```
+
+### Clean Up Datasets
+
+Remove downloaded datasets to free space:
+
+```bash
+# Remove specific dataset
+rm -rf ~/.autogoal/data/gisette
+
+# Remove all datasets (keep metadata)
+rm -rf ~/.autogoal/data/*/
+
+# Complete cleanup
+rm -rf ~/.autogoal/data/
+```
+
+<Warning>
+Deleting `~/.autogoal/data/` removes all downloaded datasets. You'll need to re-download them for future use.
+</Warning>
+
+## Troubleshooting
+
+### Connection Errors
+
+```
+⚠️  Error: Cannot download dataset list and no cached version exists.
+```
+
+**Solution:** Check your internet connection or wait for GitHub to be available. The CLI will use cached metadata if available.
+
+### Disk Space Issues
+
+```
+⚠️  Error: No space left on device
+```
+
+**Solution:**  
+1. Check available space: `df -h`
+2. Remove unnecessary datasets: `rm -rf ~/.autogoal/data/unused_dataset`
+3. Free up system space
+
+### Corrupted Downloads
+
+```
+⚠️  Error: Cannot extract dataset archive
+```
+
+**Solution:**
+1. Delete the corrupted file: `rm ~/.autogoal/data/dataset_name.zip`
+2. Re-download: `autogoal data download dataset_name`
+
+### Dataset Not Found
+
+```
+⚠️  Error: Dataset 'xyz' not found in repository
+```
+
+**Solution:**
+1. Check available datasets: `autogoal data list`
+2. Verify spelling of dataset name
+3. Update AutoGOAL to get latest dataset list
+
+## Integration with Training
+
+### Complete Workflow
+
+```bash
+# Step 1: List available datasets
+autogoal data list
+
+# Step 2: Download dataset
+autogoal data download cars
+
+# Step 3: Use in Python to export as CSV (if needed)
+python << EOF
+from autogoal.datasets import cars
+import pandas as pd
+
+X, y = cars.load()
+df = pd.DataFrame(X)
+df['target'] = y
+df.to_csv('cars.csv', index=False)
+EOF
+
+# Step 4: Train model
+autogoal ml fit cars.csv --target target --output ./models/cars
+
+# Step 5: Evaluate
+autogoal ml predict cars_test.csv --model ./models/cars
+```
+
+### Dataset Preparation Pipeline
+
+```bash
+#!/bin/bash
+# prepare-and-train.sh
+
+DATASET="$1"
+OUTPUT_DIR="./models/$DATASET"
+
+# Download dataset
+echo "Downloading $DATASET..."
+autogoal data download "$DATASET"
+
+# Convert to CSV (using Python)
+echo "Preparing dataset..."
+python convert_to_csv.py "$DATASET"
+
+# Train model
+echo "Training model..."
+autogoal ml fit "${DATASET}.csv" \
+    --output "$OUTPUT_DIR" \
+    --search-timeout 1800
+
+echo "Model saved to $OUTPUT_DIR"
+```
+
+## Best Practices
+
+1. **List before downloading**: Check what's available with `data list`
+2. **Download selectively**: Only get datasets you need to save space
+3. **Verify downloads**: Check `~/.autogoal/data/` after downloading
+4. **Cache awareness**: The CLI works offline with cached metadata
+5. **Clean up regularly**: Remove unused datasets to manage disk space
+6. **Document dataset usage**: Keep track of which datasets you use for which models
+
+<Tip>
+Create a `datasets.txt` file in your project to track required datasets:
+
+```
+# datasets.txt
+cars
+movie_reviews
+gisette
+```
+
+Then download them all:
+```bash
+cat datasets.txt | xargs autogoal data download
+```
+</Tip>
+
+## Dataset Sources
+
+AutoGOAL datasets are hosted at:
+
+- **GitHub Repository**: [github.com/autogoal/datasets](https://github.com/autogoal/datasets)
+- **Metadata URL**: `https://raw.githubusercontent.com/autogoal/datasets/master/datasets.json`
+
+All datasets are publicly available and free to use for research and experimentation.
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Training Models" icon="graduation-cap" href="/cli/training">
+    Use downloaded datasets for training
+  </Card>
+  <Card title="Datasets Overview" icon="code" href="/datasets/overview">
+    Access datasets programmatically
+  </Card>
+</CardGroup>

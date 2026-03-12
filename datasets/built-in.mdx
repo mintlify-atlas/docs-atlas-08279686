@@ -1,0 +1,615 @@
+---
+title: Built-in Datasets
+description: Comprehensive guide to all datasets available in AutoGOAL
+---
+
+This page documents all built-in datasets available in AutoGOAL, including their characteristics, size, use cases, and usage examples.
+
+## Classification Datasets
+
+### Abalone
+
+Predict the age of abalone from physical measurements.
+
+**Source**: [UCI Abalone Dataset](https://archive.ics.uci.edu/ml/datasets/Abalone)
+
+**Dataset Characteristics**:
+- **Samples**: 4,177
+- **Features**: 8 (after encoding)
+- **Task**: Multi-class classification (age prediction)
+- **Feature Types**: Mixed (categorical and numeric)
+
+**Features**:
+- Sex (M, F, I)
+- Length, Diameter, Height
+- Whole weight, Shucked weight, Viscera weight, Shell weight
+
+**Usage**:
+
+```python
+from autogoal.datasets import abalone
+
+# Load with numeric representation (default)
+X, y = abalone.load(representation="numeric")
+print(X.shape)  # (4177, 6047)
+print(len(y))   # 4177
+
+# Load with one-hot encoding
+X, y = abalone.load(representation="onehot")
+```
+
+<Accordion title="Representation Options">
+  - **numeric**: Categorical features converted to numeric values (Sex: M=3, F=2, I=1)
+  - **onehot**: Full one-hot encoding of all features
+</Accordion>
+
+---
+
+### Cars (UCI)
+
+Car evaluation based on buying price, maintenance, safety, and other attributes.
+
+**Source**: UCI Machine Learning Repository
+
+**Dataset Characteristics**:
+- **Samples**: 1,728
+- **Features**: 6 categorical attributes
+- **Task**: Multi-class classification (car acceptability)
+- **Classes**: unacc, acc, good, vgood
+
+**Features**:
+- buying: buying price (vhigh, high, med, low)
+- maint: maintenance cost (vhigh, high, med, low)
+- doors: number of doors (2, 3, 4, 5more)
+- persons: capacity (2, 4, more)
+- lug_boot: luggage boot size (small, med, big)
+- safety: safety rating (low, med, high)
+
+**Usage**:
+
+```python
+from autogoal.datasets import cars
+
+# Load with one-hot encoding (default)
+X, y = cars.load(representation="onehot")
+
+# Load with numeric encoding
+X, y = cars.load(representation="numeric")
+```
+
+---
+
+### CIFAR-10
+
+Image classification dataset with 60,000 32x32 color images in 10 classes.
+
+**Dataset Characteristics**:
+- **Training Samples**: 50,000 (5 batches of 10,000)
+- **Test Samples**: 10,000
+- **Image Size**: 32x32 pixels, RGB
+- **Classes**: 10 (airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck)
+- **Task**: Multi-class image classification
+
+**Usage**:
+
+```python
+from autogoal.datasets import cifar10
+
+# Load all training batches
+X_train, y_train, X_test, y_test = cifar10.load(training_batches=5)
+print(X_train.shape)  # (50000, 32, 32, 3)
+print(X_test.shape)   # (10000, 32, 32, 3)
+print(y_train[0])     # 6
+
+# Load fewer batches for faster experimentation
+X_train, y_train, X_test, y_test = cifar10.load(training_batches=1)
+print(X_train.shape)  # (10000, 32, 32, 3)
+```
+
+<Note>
+  Images are returned as NumPy arrays with shape (height, width, channels). Each batch contains 10,000 examples.
+</Note>
+
+---
+
+### Dorothea
+
+High-dimensional binary classification dataset for drug discovery.
+
+**Source**: [UCI Dorothea Dataset](https://archive.ics.uci.edu/ml/datasets/dorothea)
+
+**Dataset Characteristics**:
+- **Training Samples**: 800
+- **Validation Samples**: 350
+- **Features**: 100,000 (sparse binary)
+- **Task**: Binary classification
+- **Format**: Sparse matrices (CSR format)
+
+**Usage**:
+
+```python
+from autogoal.datasets import dorothea
+
+X_train, y_train, X_valid, y_valid = dorothea.load()
+print(X_train.shape)   # (800, 100000)
+print(X_valid.shape)   # (350, 100000)
+print(len(y_train))    # 800
+print(len(y_valid))    # 350
+```
+
+<Note>
+  Data is returned as sparse CSR matrices to efficiently handle the high dimensionality.
+</Note>
+
+---
+
+### German Credit
+
+Credit risk assessment based on applicant attributes.
+
+**Dataset Characteristics**:
+- **Samples**: 1,000
+- **Features**: 20 mixed attributes
+- **Task**: Binary classification (good/bad credit risk)
+
+**Usage**:
+
+```python
+from autogoal.datasets import german_credit
+
+# Load full dataset
+X, y = german_credit.load()
+
+# Load limited examples
+X, y = german_credit.load(max_examples=500)
+```
+
+---
+
+### Gisette
+
+Handwritten digit recognition for binary classification (4 vs 9).
+
+**Source**: [UCI Gisette Dataset](https://archive.ics.uci.edu/ml/datasets/Gisette)
+
+**Dataset Characteristics**:
+- **Training Samples**: 6,000
+- **Validation Samples**: 1,000
+- **Features**: 5,000
+- **Task**: Binary classification
+- **Format**: Sparse matrices
+
+**Usage**:
+
+```python
+from autogoal.datasets import gisette
+
+X_train, y_train, X_valid, y_valid = gisette.load()
+print(X_train.shape)   # (6000, 5000)
+print(X_valid.shape)   # (1000, 5000)
+print(len(y_train))    # 6000
+print(len(y_valid))    # 1000
+```
+
+---
+
+### Movie Reviews
+
+Sentiment analysis on movie reviews (positive/negative).
+
+**Dataset Characteristics**:
+- **Samples**: ~2,000 movie reviews
+- **Task**: Binary text classification
+- **Classes**: positive (pos), negative (neg)
+- **Format**: Raw text strings
+
+**Usage**:
+
+```python
+from autogoal.datasets import movie_reviews
+
+# Load all reviews
+sentences, classes = movie_reviews.load()
+
+# Load limited examples
+sentences, classes = movie_reviews.load(max_examples=100)
+
+print(sentences[0])  # Raw review text
+print(classes[0])    # 'pos' or 'neg'
+```
+
+<Note>
+  Reviews are shuffled randomly on each load. Set a random seed for reproducibility.
+</Note>
+
+---
+
+### Shuttle
+
+Space shuttle component classification from sensor data.
+
+**Source**: [UCI Statlog Shuttle Dataset](https://archive.ics.uci.edu/ml/datasets/Statlog+(Shuttle))
+
+**Dataset Characteristics**:
+- **Training Samples**: 43,500
+- **Test Samples**: 14,500
+- **Features**: 9 numeric attributes
+- **Task**: Multi-class classification
+- **Classes**: 7 shuttle states
+
+**Usage**:
+
+```python
+from autogoal.datasets import shuttle
+
+X_train, y_train, X_valid, y_valid = shuttle.load()
+print(X_train.shape)   # (43500, 9)
+print(X_valid.shape)   # (14500, 9)
+print(len(y_train))    # 43500
+print(len(y_valid))    # 14500
+
+# Load limited examples
+X_train, y_train, X_valid, y_valid = shuttle.load(max_examples=1000)
+```
+
+---
+
+### Yeast
+
+Protein localization site prediction from sequence attributes.
+
+**Source**: [UCI Yeast Dataset](https://archive.ics.uci.edu/ml/datasets/Yeast)
+
+**Dataset Characteristics**:
+- **Samples**: 1,484
+- **Features**: 8 numeric attributes
+- **Task**: Multi-class classification
+- **Classes**: 10 localization sites
+
+**Usage**:
+
+```python
+from autogoal.datasets import yeast
+
+X, y = yeast.load()
+print(X.shape)  # (1484, 8)
+print(len(y))   # 1484
+```
+
+---
+
+## Regression Datasets
+
+### Wine Quality
+
+Predict wine quality scores from physicochemical properties.
+
+**Dataset Characteristics**:
+- **Samples**: ~6,000 (red and white wines)
+- **Features**: 11 physicochemical properties + wine type
+- **Task**: Regression (quality score 0-10)
+- **Wine Types**: Red, White, or both
+
+**Features**:
+- Fixed acidity, volatile acidity, citric acid
+- Residual sugar, chlorides
+- Free/total sulfur dioxide
+- Density, pH, sulphates, alcohol
+
+**Usage**:
+
+```python
+from autogoal.datasets import wine_quality
+
+# Load both red and white wines (default)
+X, y = wine_quality.load(white=True, red=True)
+
+# Load only white wines
+X, y = wine_quality.load(white=True, red=False)
+
+# Load only red wines
+X, y = wine_quality.load(white=False, red=True)
+
+# Load limited examples
+X, y = wine_quality.load(max_examples=1000)
+
+print(X.shape)  # (n_samples, 13)
+print(y.shape)  # (n_samples,)
+```
+
+<Note>
+  The first two features in X indicate wine type: [1, 0] for white, [0, 1] for red.
+</Note>
+
+---
+
+## Natural Language Processing
+
+### HAHA 2019
+
+Spanish humor detection and funniness rating from the HAHA 2019 challenge.
+
+**Source**: [HAHA 2019 Corpus](https://www.fing.edu.uy/inco/grupos/pln/haha/index.html#data)
+
+**Dataset Characteristics**:
+- **Training Samples**: 24,000 tweets
+- **Test Samples**: 6,000 tweets
+- **Language**: Spanish
+- **Tasks**: Binary classification (humor detection) OR regression (funniness rating)
+
+**Targets**:
+- `is_humor`: Binary (0/1) indicating if text is humorous
+- `funniness_average`: Float (1-5) average funniness rating
+
+**Usage**:
+
+```python
+from autogoal.datasets import haha
+
+# Load for classification (default)
+X_train, y_train, X_test, y_test = haha.load(target="is_humor")
+print(X_train[13])  # Spanish tweet text
+print(y_train[13])  # 1 (is humor)
+
+# Load for regression (funniness rating)
+X_train, y_train, X_test, y_test = haha.load(target="funniness_average")
+print(y_train[13])  # 3.25 (funniness score)
+
+# Load limited examples
+X_train, y_train, X_test, y_test = haha.load(max_examples=100)
+print(len(X_train))  # 100
+
+# Load raw dataframes with all columns
+train_df, test_df = haha.load_raw()
+print(train_df.columns)
+# ['id', 'text', 'is_humor', 'votes_no', 'votes_1', 'votes_2', 
+#  'votes_3', 'votes_4', 'votes_5', 'funniness_average']
+print(train_df["funniness_average"].mean())  # 2.046
+```
+
+<Accordion title="Available Columns">
+  - **id**: Tweet identifier
+  - **text**: Tweet content (Spanish)
+  - **is_humor**: Binary humor indicator
+  - **votes_no, votes_1-5**: Individual humor ratings
+  - **funniness_average**: Average funniness score
+</Accordion>
+
+---
+
+### MEDDOCAN 2018
+
+Medical document anonymization - Named Entity Recognition for sensitive health information.
+
+**Source**: [MEDDOCAN IberLEF 2018](https://github.com/PlanTL-SANIDAD/SPACCC_MEDDOCAN)
+
+**Dataset Characteristics**:
+- **Training Samples**: 25,622 sentences
+- **Validation Samples**: 8,432 sentences
+- **Language**: Spanish
+- **Task**: Token-level NER (IOB tagging)
+- **Entities**: Personal health information (PHI)
+
+**Format**: 
+- X: List of token lists (sentences)
+- y: List of IOB tag lists (B-TAG, I-TAG, O)
+
+**Usage**:
+
+```python
+from autogoal.datasets import meddocan
+
+X_train, y_train, X_test, y_test = meddocan.load()
+print(len(X_train))    # 25622 sentences
+print(len(X_test))     # 8432 sentences
+
+# Each X is a list of tokens
+print(X_train[0])  # ['La', 'paciente', 'María', ...]
+
+# Each y is a list of IOB tags
+print(y_train[0])  # ['O', 'O', 'B-NOMBRE', ...]
+
+# Load limited examples
+X_train, y_train, X_test, y_test = meddocan.load(max_examples=1000)
+```
+
+**Evaluation Functions**:
+
+```python
+# Built-in evaluation metrics
+from autogoal.datasets.meddocan import leak, precision, recall, F1_beta
+
+predicted_tags = model.predict(X_test)
+
+leak_score = leak(y_test, predicted_tags)
+prec = precision(y_test, predicted_tags)
+rec = recall(y_test, predicted_tags)
+f1 = F1_beta(y_test, predicted_tags, beta=1)
+
+print(f"Precision: {prec:.3f}")
+print(f"Recall: {rec:.3f}")
+print(f"F1: {f1:.3f}")
+```
+
+<Note>
+  MEDDOCAN includes specialized evaluation functions that match the official challenge metrics.
+</Note>
+
+---
+
+## Synthetic/Testing Datasets
+
+### Dummy Dataset
+
+Generate random synthetic data for quick testing and prototyping.
+
+**Dataset Characteristics**:
+- Fully configurable size and complexity
+- Perfect for testing AutoGOAL pipelines
+- Deterministic with seed parameter
+
+**Usage**:
+
+```python
+from autogoal.datasets import dummy
+
+# Generate simple dataset
+X, y = dummy.generate(samples=100, classes=2, features=10)
+print(X.shape)  # (100, 10)
+print(len(y))   # 100
+
+# Generate with specific parameters
+X, y = dummy.generate(
+    samples=1000,
+    classes=5,
+    features=20,
+    exponent=1,
+    error=0.1,
+    seed=42  # Reproducible
+)
+
+# Minimal example for quick testing
+X, y = dummy.generate(samples=4, features=2, seed=0)
+print(X)
+# [[0.5488135  0.71518937]
+#  [0.60276338 0.54488318]
+#  [0.4236548  0.64589411]
+#  [0.43758721 0.891773  ]]
+print(y)  # array(['0', '0', '0', '1'])
+```
+
+<Accordion title="Parameters">
+  - **samples**: Number of examples to generate (default: 100)
+  - **classes**: Number of classes for classification (default: 2)
+  - **features**: Number of input features (default: 10)
+  - **exponent**: Complexity parameter (default: 1)
+  - **error**: Noise level (default: 0.1)
+  - **seed**: Random seed for reproducibility (default: None)
+</Accordion>
+
+---
+
+## Dataset Management
+
+### Automatic Downloads
+
+All datasets are automatically downloaded on first use:
+
+```python
+from autogoal.datasets import download, datapath
+
+# Explicit download (usually not needed)
+download("cifar10")
+
+# Get dataset path
+path = datapath("cifar10")
+print(path)  # ~/.autogoal/data/cifar10
+```
+
+### Storage Location
+
+Datasets are stored in:
+```
+~/.autogoal/data/
+  ├── abalone/
+  ├── cifar10/
+  ├── datasets.json
+  └── ...
+```
+
+### Offline Usage
+
+<Note>
+  Once downloaded, datasets can be used offline. The metadata file `datasets.json` is also cached locally.
+</Note>
+
+### Error Recovery
+
+If a download fails or is interrupted:
+
+```bash
+# Delete the corrupted dataset directory
+rm -rf ~/.autogoal/data/dataset_name
+
+# Retry loading in Python
+X, y = dataset_name.load()
+```
+
+---
+
+## Common Patterns
+
+### Train-Test Split
+
+Some datasets provide separate train/test splits:
+
+```python
+# Datasets with built-in splits
+X_train, y_train, X_test, y_test = cifar10.load()
+X_train, y_train, X_test, y_test = haha.load()
+X_train, y_train, X_valid, y_valid = shuttle.load()
+
+# Datasets with single split - use sklearn
+from sklearn.model_selection import train_test_split
+
+X, y = yeast.load()
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+```
+
+### Limiting Dataset Size
+
+Many datasets support `max_examples` for faster experimentation:
+
+```python
+# Load subset for quick testing
+X, y = german_credit.load(max_examples=100)
+X_train, y_train, X_test, y_test = haha.load(max_examples=500)
+```
+
+### Using with AutoML
+
+```python
+from autogoal.ml import AutoML
+from autogoal.datasets import yeast
+
+# Load dataset
+X, y = yeast.load()
+
+# Split data
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+# Train AutoML
+automl = AutoML()
+automl.fit(X_train, y_train)
+
+# Evaluate
+score = automl.score(X_test, y_test)
+print(f"Score: {score:.3f}")
+```
+
+---
+
+## Summary Table
+
+| Dataset | Samples | Features | Task | Domain |
+|---------|---------|----------|------|--------|
+| Abalone | 4,177 | 8 | Classification | Biology |
+| Cars | 1,728 | 6 | Classification | Evaluation |
+| CIFAR-10 | 60,000 | 32×32×3 | Image Classification | Vision |
+| Dorothea | 1,150 | 100,000 | Binary Classification | Drug Discovery |
+| German Credit | 1,000 | 20 | Binary Classification | Finance |
+| Gisette | 7,000 | 5,000 | Binary Classification | Vision |
+| HAHA | 30,000 | Text | Classification/Regression | NLP |
+| MEDDOCAN | 34,054 | Text | NER (IOB) | Medical NLP |
+| Movie Reviews | ~2,000 | Text | Binary Classification | NLP |
+| Shuttle | 58,000 | 9 | Multi-class | Engineering |
+| Wine Quality | ~6,000 | 13 | Regression | Chemistry |
+| Yeast | 1,484 | 8 | Multi-class | Biology |
+| Dummy | Configurable | Configurable | Classification | Synthetic |
+
+<Note>
+  All datasets are automatically downloaded and cached on first use. Internet connection required for initial download only.
+</Note>

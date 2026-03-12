@@ -1,0 +1,490 @@
+---
+title: Making Predictions
+description: Use trained AutoML models to make predictions with autogoal ml predict
+---
+
+## Overview
+
+Once you've trained an AutoML model with `autogoal ml fit`, you can use `autogoal ml predict` to make predictions on new data. The command loads your trained model and applies it to unseen examples.
+
+## Basic Usage
+
+```bash
+autogoal ml predict <input_file> [OPTIONS]
+```
+
+### Minimal Example
+
+```bash
+autogoal ml predict test.csv
+```
+
+This command:
+- Loads the model from `./storage` (default location)
+- Reads test data from `test.csv`
+- Saves predictions to `output.csv` (default)
+
+## Command Parameters
+
+<ParamField path="input" type="Path" required>
+  Path to the input file containing data for prediction (CSV or JSON format)
+</ParamField>
+
+<ParamField path="--output" type="Path" default="output.csv">
+  Path where predictions will be saved (CSV format)
+</ParamField>
+
+<ParamField path="--model" type="Path" default=".">
+  Directory containing the trained model's `storage/` folder
+</ParamField>
+
+<ParamField path="--ignore-cols" type="List[int]" default="[]">
+  List of column indices to ignore (0-based), same as used during training
+  
+  ```bash
+  autogoal ml predict test.csv --ignore-cols 0
+  ```
+</ParamField>
+
+<ParamField path="--format" type="string" default="auto">
+  Input file format: `csv` or `json`. Auto-detected from file extension if not specified
+</ParamField>
+
+## Complete Examples
+
+### Example 1: Basic Prediction
+
+Predict with default settings:
+
+```bash
+autogoal ml predict test.csv
+```
+
+**Output:**
+```
+🔮 Predicting 100 items with the pipeline:
+LogisticRegression(C=1.0) -> StandardScaler() -> ...
+💾 Predictions saved to /current/directory/output.csv
+```
+
+### Example 2: Custom Model and Output
+
+Use a model from a specific directory:
+
+```bash
+autogoal ml predict new_data.csv \
+  --model ./models/housing \
+  --output predictions_2024.csv
+```
+
+### Example 3: Ignoring Columns
+
+Ignore the same columns as during training:
+
+```bash
+# Training command (for reference)
+autogoal ml fit train.csv --ignore-cols 0 --target class
+
+# Prediction with same ignored columns
+autogoal ml predict test.csv --ignore-cols 0 --output results.csv
+```
+
+<Warning>
+The `--ignore-cols` parameter should match what you used during training. Column indices must correspond to the same features.
+</Warning>
+
+### Example 4: JSON Input
+
+Predict on JSON data:
+
+```bash
+autogoal ml predict test_data.json \
+  --format json \
+  --model ./models/classifier \
+  --output predictions.csv
+```
+
+### Example 5: Batch Processing
+
+Process multiple test files:
+
+```bash
+# Predict on multiple files using a loop
+for file in test_*.csv; do
+  autogoal ml predict "$file" \
+    --model ./models/production \
+    --output "predictions_${file}"
+done
+```
+
+### Example 6: Full Pipeline
+
+Complete train-predict workflow:
+
+```bash
+# Step 1: Train the model
+autogoal ml fit train.csv \
+  --target price \
+  --output ./models/housing \
+  --search-timeout 3600
+
+# Step 2: Make predictions
+autogoal ml predict test.csv \
+  --model ./models/housing \
+  --output test_predictions.csv
+```
+
+## Understanding the Output
+
+### Console Output
+
+When making predictions, you'll see:
+
+```
+🔮 Predicting 250 items with the pipeline:
+DecisionTreeClassifier(
+    max_depth=10,
+    min_samples_split=5
+) -> StandardScaler() -> PCA(n_components=10)
+
+💾 Predictions saved to /path/to/output.csv
+```
+
+The console shows:
+1. Number of items being predicted
+2. The complete pipeline structure with parameters
+3. Confirmation of where predictions were saved
+
+### Predictions File Format
+
+The output CSV file contains a single column named `y` with predictions:
+
+```csv
+,y
+0,class_a
+1,class_b
+2,class_a
+3,class_c
+...
+```
+
+**Structure:**
+- First column: Row index (0-based)
+- Second column (`y`): Predicted values
+- One prediction per input row
+
+<Note>
+The predictions are in the same order as the input data. Row 0 in predictions corresponds to row 0 in your test file.
+</Note>
+
+## Input Data Requirements
+
+### Feature Consistency
+
+Your test data must:
+
+1. **Have the same features** as training data (excluding target column)
+2. **Match the feature order** from training
+3. **Use compatible types** (numeric, categorical, etc.)
+4. **Exclude the target column** (if present in test file, it will be ignored)
+
+### Example Data Alignment
+
+**Training data (`train.csv`):**
+```csv
+feature1,feature2,feature3,target
+1.0,5.2,cat,A
+2.3,6.1,dog,B
+...
+```
+
+**Test data (`test.csv`):**
+```csv
+feature1,feature2,feature3
+1.5,5.8,cat
+2.1,6.3,dog
+...
+```
+
+**Important:** Test data should have all feature columns but NOT the target column.
+
+## Working with Model Directories
+
+### Default Location
+
+If you trained with:
+```bash
+autogoal ml fit train.csv
+```
+
+The model is saved in `./storage`, so predict with:
+```bash
+autogoal ml predict test.csv
+```
+
+### Custom Location
+
+If you trained with:
+```bash
+autogoal ml fit train.csv --output ./models/experiment1
+```
+
+The model is in `./models/experiment1/storage`, so predict with:
+```bash
+autogoal ml predict test.csv --model ./models/experiment1
+```
+
+<Tip>
+The `--model` parameter should point to the directory containing the `storage/` folder, not to `storage/` itself.
+</Tip>
+
+## Error Handling
+
+### Common Errors
+
+#### Model Not Found
+
+```
+⚠️  Error: Cannot load model from specified path.
+```
+
+**Solution:** Verify the model directory path:
+```bash
+ls -la ./storage  # Check if storage folder exists
+autogoal ml predict test.csv --model /correct/path
+```
+
+#### Feature Mismatch
+
+```
+⚠️  Error: Feature dimension mismatch.
+```
+
+**Solution:** Ensure test data has:
+- Same number of features as training data
+- Same feature order
+- Same `--ignore-cols` settings
+
+#### File Format Error
+
+```
+⚠️  Error: Input format not recognized. Must be either CSV or JSON.
+```
+
+**Solution:** Specify format explicitly:
+```bash
+autogoal ml predict data.json --format json
+```
+
+## Inspecting Models
+
+Before making predictions, inspect your model to understand what it does.
+
+### Inspect Command
+
+```bash
+autogoal ml inspect [MODEL_PATH]
+```
+
+<ParamField path="model" type="string" default=".">
+  Path to the AutoGOAL serialized model directory
+</ParamField>
+
+### Example Usage
+
+```bash
+autogoal ml inspect ./models/housing
+```
+
+**Output:**
+```
+🔍 Inspecting AutoML model: [Algorithm details]
+```
+
+The inspect command shows:
+- Algorithm sequence in the pipeline
+- Hyperparameters for each algorithm  
+- Input/output types
+- Number of features expected
+
+### Inspection Example
+
+```bash
+# Inspect default model location
+autogoal ml inspect
+
+# Inspect specific model
+autogoal ml inspect ./models/experiment1
+
+# Inspect before predicting
+autogoal ml inspect ./models/production
+autogoal ml predict test.csv --model ./models/production
+```
+
+<Tip>
+Always inspect your model before deploying to production to verify the pipeline structure and ensure it matches your expectations.
+</Tip>
+
+## Exporting Models
+
+Export trained models for deployment in production environments.
+
+### Export Command
+
+```bash
+autogoal ml export [OUTPUT_PATH]
+```
+
+<ParamField path="output" type="string" default=".">
+  Location to export the model for production use
+</ParamField>
+
+### Example Usage
+
+```bash
+# Export from current directory (default model location)
+autogoal ml export ./production-model
+
+# Export specific model
+cd ./models/housing
+autogoal ml export ./exported-housing-model
+```
+
+### Exported Model Structure
+
+The export command creates a portable model package that includes:
+- Serialized pipeline
+- All necessary metadata
+- Dependency information
+- Docker configuration (if applicable)
+
+<Note>
+Exported models can be deployed as REST APIs, integrated into applications, or used in production pipelines.
+</Note>
+
+## Performance Considerations
+
+### Prediction Speed
+
+Prediction time depends on:
+- Number of test samples
+- Pipeline complexity (number of algorithms)
+- Feature dimensionality
+- Hardware resources
+
+**Typical prediction speeds:**
+- Simple pipelines (1-2 algorithms): 100-1000 samples/second
+- Complex pipelines (5+ algorithms): 10-100 samples/second
+
+### Batch Optimization
+
+For large datasets, process in batches:
+
+```bash
+# Split large test file into chunks
+split -l 10000 large_test.csv chunk_
+
+# Predict on each chunk
+for chunk in chunk_*; do
+  autogoal ml predict "$chunk" \
+    --model ./models/production \
+    --output "pred_${chunk}.csv"
+done
+
+# Combine results
+cat pred_chunk_*.csv > final_predictions.csv
+```
+
+## Integration Patterns
+
+### Automated Pipeline
+
+Create a prediction script:
+
+```bash
+#!/bin/bash
+# predict.sh - Automated prediction script
+
+MODEL_DIR="./models/production"
+INPUT_FILE="$1"
+OUTPUT_FILE="${INPUT_FILE%.csv}_predictions.csv"
+
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "Error: Input file not found"
+    exit 1
+fi
+
+autogoal ml predict "$INPUT_FILE" \
+    --model "$MODEL_DIR" \
+    --output "$OUTPUT_FILE"
+
+echo "Predictions saved to $OUTPUT_FILE"
+```
+
+Usage:
+```bash
+chmod +x predict.sh
+./predict.sh new_data.csv
+```
+
+### Continuous Prediction
+
+Monitor a directory for new files:
+
+```bash
+#!/bin/bash
+# watch-and-predict.sh
+
+MODEL_DIR="./models/production"
+INPUT_DIR="./incoming"
+OUTPUT_DIR="./predictions"
+
+while true; do
+    for file in "$INPUT_DIR"/*.csv; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            autogoal ml predict "$file" \
+                --model "$MODEL_DIR" \
+                --output "$OUTPUT_DIR/pred_$filename"
+            mv "$file" "$INPUT_DIR/processed/"
+        fi
+    done
+    sleep 60
+done
+```
+
+## Best Practices
+
+1. **Verify model location**: Always check that `storage/` exists in the model directory
+2. **Match training configuration**: Use same `--ignore-cols` as during training
+3. **Validate input data**: Ensure feature names and types match training data
+4. **Inspect before deploying**: Use `autogoal ml inspect` to verify the pipeline
+5. **Use descriptive output names**: Name prediction files clearly for tracking
+6. **Handle errors gracefully**: Check file existence before prediction
+7. **Version your models**: Keep multiple model versions for comparison
+
+<Tip>
+Create a directory structure for organized model management:
+
+```
+models/
+├── production/
+├── staging/
+├── experiments/
+│   ├── v1/
+│   ├── v2/
+│   └── v3/
+└── archived/
+```
+</Tip>
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Training Models" icon="graduation-cap" href="/cli/training">
+    Train models with `autogoal ml fit`
+  </Card>
+  <Card title="Datasets" icon="database" href="/cli/datasets">
+    Manage training and test data
+  </Card>
+</CardGroup>

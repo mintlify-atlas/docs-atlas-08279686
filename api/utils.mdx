@@ -1,0 +1,619 @@
+---
+title: "Utils"
+description: "Utility functions and helper classes for AutoGOAL"
+icon: "wrench"
+---
+
+AutoGOAL provides a comprehensive set of utility functions and classes to support development, optimization, caching, resource management, and more.
+
+## Core Utilities
+
+### nice_repr
+
+A decorator that automatically generates a nice `__repr__()` method for any class. The decorator prints the class name along with constructor parameters.
+
+```python
+from autogoal.utils import nice_repr
+
+@nice_repr
+class MyClass:
+    def __init__(self, a, b, c):
+        self.a = a
+        self._b = b
+        self._c = c
+    
+    @property
+    def b(self):
+        return self._b
+```
+
+<ParamField path="cls" type="class">
+  The class to decorate with automatic repr generation
+</ParamField>
+
+<ResponseField name="cls" type="class">
+  The decorated class with an auto-generated `__repr__()` method
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import nice_repr
+
+@nice_repr
+class Person:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+
+person = Person("Alice", 30)
+print(person)  # Output: Person(name="Alice", age=30)
+```
+
+<Tip>
+All parameters that you want printed in `repr()` should be stored in the instance or accessible by name (e.g., as a property).
+</Tip>
+
+#### Advanced Features
+
+<CodeGroup>
+
+```python Nested Objects
+from autogoal.utils import nice_repr
+
+@nice_repr
+class Inner:
+    def __init__(self, value):
+        self.value = value
+
+@nice_repr
+class Outer:
+    def __init__(self, inner):
+        self.inner = inner
+
+obj = Outer([Inner(i) for i in range(3)])
+print(obj)
+# Output:
+# Outer(
+#     inner=[
+#         Inner(value=0),
+#         Inner(value=1),
+#         Inner(value=2),
+#     ]
+# )
+```
+
+```python Cyclic References
+from autogoal.utils import nice_repr
+
+@nice_repr
+class Node:
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = self if next is None else next
+
+node = Node(42)
+print(node)
+# Output: Node(value=42, next=Node(value=42, next=Node(...)))
+```
+
+</CodeGroup>
+
+<Note>
+Change `autogoal.utils.MAX_REPR_DEPTH` to adjust the maximum depth level for recursive repr (default is 10).
+</Note>
+
+### flatten
+
+Recursively flattens a nested list structure into a single-level list.
+
+```python
+from autogoal.utils import flatten
+
+result = flatten(nested_list)
+```
+
+<ParamField path="y" type="list">
+  A potentially nested list structure
+</ParamField>
+
+<ResponseField name="result" type="list">
+  A flattened single-level list containing all elements
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import flatten
+
+nested = [[1], [2, [3]], 4]
+flat = flatten(nested)
+print(flat)  # Output: [1, 2, 3, 4]
+```
+
+### compute_class_weights
+
+Computes relative class weights for imbalanced datasets. Useful for handling class imbalance in machine learning tasks.
+
+```python
+from autogoal.utils import compute_class_weights
+
+weights = compute_class_weights(y)
+```
+
+<ParamField path="y" type="list">
+  List of class labels (can be nested)
+</ParamField>
+
+<ResponseField name="weights" type="dict">
+  Dictionary mapping each class to its relative weight. Weights are computed as: max_count / class_count
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import compute_class_weights
+
+y = [['A', 'B', 'A'], ['C'], ['C', 'C']]
+weights = compute_class_weights(y)
+print(weights)
+# Output: {'A': 1.5, 'B': 3.0, 'C': 1.0}
+```
+
+<Tip>
+This function automatically handles nested input by flattening it first.
+</Tip>
+
+### factory
+
+Creates a factory function that calls the given function or type with provided arguments.
+
+```python
+from autogoal.utils import factory
+
+creator = factory(func_or_type, *args, **kwargs)
+```
+
+<ParamField path="func_or_type" type="callable or type">
+  A function or class to be called
+</ParamField>
+
+<ParamField path="args" type="tuple">
+  Positional arguments to pass to the function
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+  Keyword arguments to pass to the function
+</ParamField>
+
+<ResponseField name="creator" type="function">
+  A callable that when invoked returns the result of calling func_or_type with the provided arguments
+</ResponseField>
+
+## Optimization
+
+### optimize
+
+A general-purpose black-box optimization function that can be applied to any function with suitable parameter annotations.
+
+```python
+from autogoal.utils import optimize
+
+best, best_fn = optimize(fn, search_strategy=PESearch, generations=100)
+```
+
+<ParamField path="fn" type="function">
+  The function to optimize. Must have parameter annotations for AutoGOAL to generate a search grammar.
+</ParamField>
+
+<ParamField path="search_strategy" type="class" default="PESearch">
+  The search strategy class to use (e.g., PESearch, RandomSearch)
+</ParamField>
+
+<ParamField path="generations" type="int" default="100">
+  Maximum number of generations to run
+</ParamField>
+
+<ParamField path="pop_size" type="int" default="10">
+  Population size for the search
+</ParamField>
+
+<ParamField path="allow_duplicates" type="bool" default="False">
+  Whether to allow duplicate solutions in the population
+</ParamField>
+
+<ParamField path="logger" type="Logger or list" default="None">
+  Logger instance(s) to track optimization progress
+</ParamField>
+
+<ResponseField name="best" type="object">
+  The best solution found during optimization
+</ResponseField>
+
+<ResponseField name="best_fn" type="float">
+  The fitness value of the best solution
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import optimize
+from autogoal.grammar import ContinuousValue
+
+def my_function(x: ContinuousValue(0, 10), y: ContinuousValue(0, 10)):
+    return -(x**2 + y**2)  # Maximize by returning negative
+
+best, score = optimize(my_function, generations=50)
+print(f"Best solution: {best}, Score: {score}")
+```
+
+## Caching
+
+### PersistentDict
+
+A persistent dictionary with an API compatible with shelve and anydbm. The dict is kept in memory for fast operations, with delayed writes to disk.
+
+```python
+from autogoal.utils import PersistentDict
+
+data = PersistentDict(filename, flag="c", format="pickle")
+```
+
+<ParamField path="filename" type="str">
+  Path to the file for persistent storage
+</ParamField>
+
+<ParamField path="flag" type="str" default="c">
+  Access mode: "r" (readonly), "c" (create if not exists), "n" (new/overwrite)
+</ParamField>
+
+<ParamField path="mode" type="int or None" default="None">
+  File permissions (e.g., 0o644)
+</ParamField>
+
+<ParamField path="format" type="str" default="pickle">
+  Serialization format: "pickle", "json", or "csv"
+</ParamField>
+
+#### Methods
+
+<ResponseField name="sync" type="method">
+  Manually write the dictionary to disk
+</ResponseField>
+
+<ResponseField name="close" type="method">
+  Save and close the persistent dictionary
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import PersistentDict
+
+# Create or open persistent dict
+with PersistentDict("cache.pkl") as cache:
+    cache["key1"] = "value1"
+    cache["key2"] = [1, 2, 3]
+    # Automatically saved on exit
+
+# Reopen later
+with PersistentDict("cache.pkl", flag="r") as cache:
+    print(cache["key1"])  # Output: value1
+```
+
+<Note>
+Input file format is automatically discovered. All three serialization formats (pickle, json, csv) are backed by fast C implementations.
+</Note>
+
+### CacheManager
+
+Singleton class for managing cached objects across the application.
+
+```python
+from autogoal.utils import CacheManager
+
+value = CacheManager.get(name, func)
+```
+
+<ParamField path="name" type="str">
+  Unique identifier for the cached object
+</ParamField>
+
+<ParamField path="func" type="callable">
+  Function to call to create the object if not in cache
+</ParamField>
+
+<ResponseField name="value" type="any">
+  The cached object (either retrieved from cache or newly created)
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import CacheManager
+
+def expensive_computation():
+    # Simulate expensive operation
+    return [i**2 for i in range(1000000)]
+
+# First call: computes and caches
+result1 = CacheManager.get("squares", expensive_computation)
+
+# Second call: retrieves from cache instantly
+result2 = CacheManager.get("squares", expensive_computation)
+```
+
+## Resource Management
+
+### ResourceManager
+
+Manages CPU time and memory limits for function execution. Useful for preventing runaway processes.
+
+```python
+from autogoal.utils import ResourceManager
+
+manager = ResourceManager(time_limit=300, memory_limit=4*1024**3)
+```
+
+<ParamField path="time_limit" type="int" default="300">
+  Maximum execution time in seconds (default: 5 minutes)
+</ParamField>
+
+<ParamField path="memory_limit" type="int" default="4294967296">
+  Maximum memory usage in bytes (default: 4 GB)
+</ParamField>
+
+<Warning>
+**Platform Support:** Memory restriction is only available on Linux systems. On other platforms, warnings will be issued.
+</Warning>
+
+#### Methods
+
+<ResponseField name="run_restricted" type="method">
+  Executes a function with restricted CPU time and RAM memory usage
+</ResponseField>
+
+<ResponseField name="set_time_limit" type="method">
+  Update the time limit for future restricted functions
+</ResponseField>
+
+<ResponseField name="set_memory_limit" type="method">
+  Update the memory limit for future restricted functions
+</ResponseField>
+
+<ResponseField name="get_used_memory" type="method">
+  Returns the amount of memory being used by the current process
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import ResourceManager
+
+def potentially_expensive_function(n):
+    # Some computation that might use too much memory/time
+    return sum(i**2 for i in range(n))
+
+manager = ResourceManager(
+    time_limit=10,  # 10 seconds max
+    memory_limit=1024**3  # 1 GB max
+)
+
+try:
+    result = manager.run_restricted(potentially_expensive_function, 1000000)
+    print(f"Result: {result}")
+except TimeoutError:
+    print("Function exceeded time limit")
+except MemoryError:
+    print("Function exceeded memory limit")
+```
+
+### RestrictedWorker
+
+Executes functions in a separate process with time and memory restrictions.
+
+```python
+from autogoal.utils import RestrictedWorker
+
+worker = RestrictedWorker(function, timeout=60, memory=2*1024**3)
+result = worker(*args, **kwargs)
+```
+
+<ParamField path="function" type="callable">
+  The function to execute with restrictions
+</ParamField>
+
+<ParamField path="timeout" type="int">
+  Maximum execution time in seconds
+</ParamField>
+
+<ParamField path="memory" type="int">
+  Maximum memory usage in bytes
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.utils import RestrictedWorker
+
+def slow_function(x):
+    total = 0
+    for i in range(x):
+        total += i ** 2
+    return total
+
+worker = RestrictedWorker(
+    slow_function,
+    timeout=5,
+    memory=512 * 1024**2  # 512 MB
+)
+
+try:
+    result = worker(1000000)
+    print(f"Result: {result}")
+except TimeoutError as e:
+    print(f"Timeout: {e}")
+```
+
+## Storage and Serialization
+
+### dumps / loads
+
+Serialize and deserialize Python objects to/from strings.
+
+```python
+from autogoal.utils import dumps, loads
+
+encoded = dumps(data, use_dill=False)
+data = loads(encoded, use_dill=False)
+```
+
+<ParamField path="data" type="object">
+  Python object to serialize
+</ParamField>
+
+<ParamField path="use_dill" type="bool" default="False">
+  If True, use dill instead of pickle for serialization (supports more object types)
+</ParamField>
+
+#### Example
+
+```python
+from autogoal.utils import dumps, loads
+
+original = {"name": "AutoGOAL", "version": 2.0}
+encoded = dumps(original)
+restored = loads(encoded)
+
+print(restored)  # Output: {'name': 'AutoGOAL', 'version': 2.0}
+```
+
+### ensure_directory
+
+Ensures a directory exists, creating it if necessary. If it exists, removes and recreates it.
+
+```python
+from autogoal.utils import ensure_directory
+
+ensure_directory(path)
+```
+
+<ParamField path="path" type="str">
+  Path to the directory to ensure exists
+</ParamField>
+
+<Warning>
+This function removes the directory if it already exists, so use with caution!
+</Warning>
+
+## Package Management
+
+### find_packages
+
+Finds every installed package in the current Python environment whose name matches a regex pattern.
+
+```python
+from autogoal.utils import find_packages
+
+packages = find_packages(regex)
+```
+
+<ParamField path="regex" type="str">
+  Regular expression pattern to match package names
+</ParamField>
+
+<ResponseField name="packages" type="list">
+  List of installed packages matching the pattern
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import find_packages
+
+# Find all numpy-related packages
+matching = find_packages(r'^numpy')
+print(matching)
+# Output: [numpy 1.24.2 (/usr/local/lib/python3.9/site-packages)]
+```
+
+### is_package_installed
+
+Checks if a package is installed in the current Python environment.
+
+```python
+from autogoal.utils import is_package_installed
+
+installed = is_package_installed(package_name)
+```
+
+<ParamField path="package_name" type="str">
+  Name of the package to check
+</ParamField>
+
+<ResponseField name="installed" type="bool">
+  True if the package is installed, False otherwise
+</ResponseField>
+
+#### Example
+
+```python
+from autogoal.utils import is_package_installed
+
+if is_package_installed("sklearn"):
+    print("scikit-learn is installed")
+else:
+    print("scikit-learn is not installed")
+```
+
+## Constants
+
+AutoGOAL provides convenient constants for memory and time units:
+
+### Memory Units
+
+```python
+from autogoal.utils import Kb, Mb, Gb
+
+# Memory constants
+Kb = 1024
+Mb = 1024 * Kb
+Gb = 1024 * Mb
+
+# Usage
+memory_limit = 2 * Gb  # 2 gigabytes
+```
+
+### Time Units
+
+```python
+from autogoal.utils import Sec, Min, Hour
+
+# Time constants
+Sec = 1
+Min = 60 * Sec
+Hour = 60 * Min
+
+# Usage
+time_limit = 5 * Min  # 5 minutes
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Grammar" icon="book" href="/api/grammar/overview">
+    Learn about AutoGOAL's grammar system for search spaces
+  </Card>
+  
+  <Card title="Search" icon="magnifying-glass" href="/api/search/overview">
+    Explore search strategies and optimization algorithms
+  </Card>
+  
+  <Card title="AutoML API" icon="brain" href="/api/automl">
+    Complete AutoML class reference
+  </Card>
+  
+  <Card title="Metrics" icon="chart-line" href="/api/metrics">
+    Evaluation metrics for ML models
+  </Card>
+</CardGroup>

@@ -1,0 +1,151 @@
+{
+  "projectType": "framework",
+  "projectName": "AutoGOAL",
+  "projectDescription": "A Python framework for program synthesis with a focus on Automated Machine Learning.",
+  "theme": "aspen",
+  "primaryColor": "#fc6857",
+  "lightColor": "#fcb4a4",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/pipelines",
+              "concepts/search-spaces",
+              "concepts/semantic-types",
+              "concepts/optimization"
+            ]
+          },
+          {
+            "group": "Using AutoML",
+            "pages": [
+              "automl/overview",
+              "automl/classification",
+              "automl/regression",
+              "automl/custom-pipelines"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "cli/overview",
+              "cli/training",
+              "cli/prediction",
+              "cli/datasets",
+              "cli/contrib"
+            ]
+          },
+          {
+            "group": "Advanced Guides",
+            "pages": [
+              "guides/custom-algorithms",
+              "guides/search-strategies",
+              "guides/contrib-system",
+              "guides/remote-execution"
+            ]
+          },
+          {
+            "group": "Datasets",
+            "pages": [
+              "datasets/overview",
+              "datasets/built-in"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/automl",
+              "api/optimize"
+            ]
+          },
+          {
+            "group": "Grammar & Sampling",
+            "pages": [
+              "api/grammar/overview",
+              "api/grammar/cfg",
+              "api/grammar/graph"
+            ]
+          },
+          {
+            "group": "Knowledge Base",
+            "pages": [
+              "api/kb/overview",
+              "api/kb/algorithms",
+              "api/kb/semantic-types",
+              "api/kb/data-types"
+            ]
+          },
+          {
+            "group": "Search",
+            "pages": [
+              "api/search/overview",
+              "api/search/algorithms",
+              "api/search/loggers"
+            ]
+          },
+          {
+            "group": "Metrics",
+            "pages": [
+              "api/metrics"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utils"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automatic pipeline generation and optimization",
+    "Type-based algorithm composition",
+    "Multiple search strategies (PGE, Random, Surrogate)",
+    "Built-in machine learning algorithms via contrib system",
+    "CLI for training and prediction",
+    "Extensible grammar-based search spaces",
+    "Cross-validation and multi-objective optimization",
+    "Remote execution support"
+  ],
+  "publicApiSurface": [
+    "autogoal.ml.AutoML",
+    "autogoal.optimize",
+    "autogoal.grammar.generate_cfg",
+    "autogoal.grammar.ContextFreeGrammar",
+    "autogoal.grammar.GraphSpace",
+    "autogoal.kb.Pipeline",
+    "autogoal.kb.SemanticType",
+    "autogoal.kb.Supervised",
+    "autogoal.kb.build_pipeline_graph",
+    "autogoal.search.PESearch",
+    "autogoal.search.RandomSearch",
+    "autogoal.search.NSPESearch",
+    "autogoal.search.SurrogateSearch",
+    "autogoal.ml.metrics.accuracy",
+    "autogoal.datasets",
+    "CLI: autogoal ml fit",
+    "CLI: autogoal ml predict",
+    "CLI: autogoal data download",
+    "CLI: autogoal contrib list"
+  ]
+}
